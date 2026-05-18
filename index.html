@@ -20,6 +20,7 @@
   --bad: #ef4444;
   --accent: #f59e0b;
   --waiting: #3b82f6;
+  --backburner: #71717a;
   --prio-high: #ef4444;
   --prio-med: #eab308;
   --prio-low: #3b82f6;
@@ -46,9 +47,7 @@ header .date { font-size: 12px; color: var(--text-3); margin-top: 4px; font-weig
 .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 /* Search */
-.search-wrap {
-  position: relative;
-}
+.search-wrap { position: relative; }
 input.search {
   background: var(--card); border: 1px solid var(--border);
   color: var(--text); border-radius: 6px;
@@ -114,6 +113,7 @@ input.search:focus + kbd { display: none; }
 .dd-quick span strong { color: var(--text-2); font-weight: 600; }
 .dd-quick .pill-stuck { color: var(--bad); }
 .dd-quick .pill-waiting { color: var(--waiting); }
+.dd-quick .pill-backburner { color: var(--text-3); }
 
 /* Tabs */
 .tabs {
@@ -319,7 +319,7 @@ input.search:focus + kbd { display: none; }
 /* Items (actionables) */
 ul.items { list-style: none; }
 ul.items > li {
-  padding: 7px 0 7px 0; border-bottom: 1px solid var(--border);
+  padding: 7px 0; border-bottom: 1px solid var(--border);
   position: relative;
 }
 ul.items > li:last-child { border-bottom: none; }
@@ -387,18 +387,49 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
 .meta-badge.level-warn   { color: var(--warn); background: rgba(234, 179, 8, 0.10); }
 .meta-badge.level-bad    { color: var(--bad);  background: rgba(239, 68, 68, 0.10); }
 
-.label-btn {
-  background: transparent; border: 1px solid var(--border-strong);
-  color: var(--text-3);
-  padding: 2px 8px; border-radius: 10px; font-size: 10px;
-  cursor: pointer; font-family: inherit; font-weight: 600;
+/* Status chip + picker */
+.status-wrap { position: relative; flex-shrink: 0; }
+.status-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: 10px;
+  font-size: 10px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+  border: 1px solid transparent;
   text-transform: uppercase; letter-spacing: 0.04em;
-  white-space: nowrap; flex-shrink: 0;
+  white-space: nowrap;
 }
-.label-btn:hover { background: var(--card-hover); color: var(--text-2); }
-.label-btn.active.today { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
-.label-btn.active.stuck { background: var(--bad); color: #fafafa; border-color: var(--bad); }
-.label-btn.active.waiting { background: var(--waiting); color: #fafafa; border-color: var(--waiting); }
+.status-chip.unset {
+  background: transparent; color: var(--text-4);
+  border-color: var(--border-strong);
+}
+.status-chip.unset:hover { color: var(--text-2); border-color: var(--border); }
+.status-chip.today      { background: rgba(245, 158, 11, 0.15); color: var(--accent);     border-color: var(--accent); }
+.status-chip.backburner { background: rgba(113, 113, 122, 0.18); color: var(--text-2);    border-color: var(--text-3); }
+.status-chip.waiting    { background: rgba(59, 130, 246, 0.15);  color: var(--waiting);   border-color: var(--waiting); }
+.status-chip.stuck      { background: rgba(239, 68, 68, 0.15);   color: var(--bad);       border-color: var(--bad); }
+.status-chip .dot {
+  width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+}
+
+.status-picker {
+  position: absolute; top: 100%; right: 0;
+  background: var(--card); border: 1px solid var(--border-strong);
+  border-radius: 8px; padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 50; min-width: 160px; margin-top: 4px;
+}
+.status-picker .picker-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 5px;
+  cursor: pointer; font-size: 12px;
+  text-transform: none; letter-spacing: 0;
+}
+.status-picker .picker-option:hover { background: var(--card-hover); }
+.status-picker .picker-option .dot {
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+}
+.status-picker .picker-divider { height: 1px; background: var(--border); margin: 4px 0; }
+.status-picker .picker-option.clear { color: var(--text-3); font-style: italic; }
 
 ul.items .li-rm {
   background: none; border: none; color: var(--text-4); cursor: pointer;
@@ -409,26 +440,39 @@ ul.items .li-rm {
 ul.items li:hover .li-rm { opacity: 1; }
 ul.items .li-rm:hover { color: var(--bad); }
 
-/* Inline blocker row */
-.blocker-row {
+/* Context rows under stuck/waiting */
+.context-row {
   margin-top: 6px; margin-left: 35px;
   display: flex; align-items: center; gap: 8px;
 }
-.blocker-row.hidden { display: none; }
-.blocker-row .lbl {
-  font-size: 9px; color: var(--bad);
+.context-row.hidden { display: none; }
+.context-row .lbl {
+  font-size: 9px;
   text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
   white-space: nowrap;
 }
-.blocker-row input {
-  flex: 1; background: rgba(239, 68, 68, 0.06);
-  border: 1px solid rgba(239, 68, 68, 0.2);
+.context-row input {
+  flex: 1;
   border-radius: 5px;
   color: var(--text); font-family: inherit;
   padding: 4px 8px; font-size: 12px;
 }
-.blocker-row input:focus { outline: none; border-color: var(--bad); }
-.blocker-row input::placeholder { color: var(--text-4); font-style: italic; }
+.context-row input:focus { outline: none; }
+.context-row input::placeholder { color: var(--text-4); font-style: italic; }
+
+.context-row.stuck .lbl { color: var(--bad); }
+.context-row.stuck input {
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.context-row.stuck input:focus { border-color: var(--bad); }
+
+.context-row.waiting .lbl { color: var(--waiting); }
+.context-row.waiting input {
+  background: rgba(59, 130, 246, 0.06);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+.context-row.waiting input:focus { border-color: var(--waiting); }
 
 /* Done footer */
 .done-footer {
@@ -479,15 +523,6 @@ ul.items .li-rm:hover { color: var(--bad); }
   font-weight: 500; cursor: pointer; white-space: nowrap;
 }
 .today-item .proj-tag:hover { background: #2a2a30; color: var(--text); }
-.today-item .stuck-indicator,
-.today-item .waiting-indicator {
-  font-size: 10px;
-  padding: 3px 8px; border-radius: 8px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-.today-item .stuck-indicator { color: var(--bad); background: rgba(239, 68, 68, 0.1); }
-.today-item .waiting-indicator { color: var(--waiting); background: rgba(59, 130, 246, 0.1); }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -547,6 +582,15 @@ ul.items .li-rm:hover { color: var(--bad); }
 </div>
 
 <script>
+// ─── Status definitions ────────────────────────────────
+const STATUSES = ["today", "backburner", "waiting", "stuck"];
+const STATUS_META = {
+  today:      { label: "Today",      color: "#f59e0b" },
+  backburner: { label: "Backburner", color: "#71717a" },
+  waiting:    { label: "Waiting",    color: "#3b82f6" },
+  stuck:      { label: "Stuck",      color: "#ef4444" }
+};
+
 // ─── State ──────────────────────────────────────────────
 const STORE_KEY = "projects-v1";
 function loadState() {
@@ -576,21 +620,31 @@ state.projects.forEach(p => {
   if (p.labelId === undefined) p.labelId = null;
   if (!p.createdAt) p.createdAt = NOW;
   (p.actionables || []).forEach(a => {
-    if (!Array.isArray(a.labels)) a.labels = [];
+    // Convert legacy labels array to single status
+    if (a.status === undefined) {
+      const labs = Array.isArray(a.labels) ? a.labels : [];
+      if (labs.includes("stuck"))         a.status = "stuck";
+      else if (labs.includes("today"))    a.status = "today";
+      else if (labs.includes("waiting"))  a.status = "waiting";
+      else                                 a.status = null;
+    }
+    // Legacy blockedBy → blocker text
     if (Array.isArray(a.blockedBy) && a.blockedBy.length && Array.isArray(p.blockers)) {
       const texts = a.blockedBy
         .map(bid => (p.blockers.find(b => b.id === bid) || {}).text)
         .filter(Boolean);
       if (texts.length && !a.blocker) a.blocker = texts.join("; ");
     }
-    if (typeof a.blocker !== "string") a.blocker = "";
+    if (typeof a.blocker !== "string")    a.blocker = "";
+    if (typeof a.waitingFor !== "string") a.waitingFor = "";
     if (!a.createdAt) a.createdAt = p.createdAt || NOW;
     if (!a.updatedAt) a.updatedAt = a.createdAt;
     if (typeof a.priority !== "number") a.priority = 0;
     if (a.stuckSince === undefined) {
-      a.stuckSince = (a.labels || []).includes("stuck") ? NOW : null;
+      a.stuckSince = a.status === "stuck" ? NOW : null;
     }
     if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
+    delete a.labels;
     delete a.blockedBy;
     delete a.dueDate;
   });
@@ -599,14 +653,14 @@ state.projects.forEach(p => {
 saveState();
 
 let currentView = (window.localStorage.getItem("view") || "projects");
-let activePicker = null;
+let activeLabelPicker = null;
+let activeStatusPicker = null; // "<projId>:<itemId>" or null
 let searchTerm = "";
-let expandedDone = new Set(); // project ids whose Done section is expanded
+let expandedDone = new Set();
 
-const ARCHIVE_AFTER_MS = 24 * 60 * 60 * 1000; // 24 hours
+const ARCHIVE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 function uid() { return Math.random().toString(36).slice(2,10); }
-
 function escapeAttr(s) {
   const div = document.createElement("div");
   div.textContent = s == null ? "" : String(s);
@@ -615,22 +669,7 @@ function escapeAttr(s) {
 function findProject(id) { return state.projects.find(p => p.id === id); }
 function findActionable(p, id) { return p && p.actionables.find(a => a.id === id); }
 function findLabel(id) { return state.labels.find(l => l.id === id); }
-function hasLabel(a, label) { return (a.labels || []).includes(label); }
-function toggleLabel(a, label) {
-  const had = hasLabel(a, label);
-  const i = a.labels.indexOf(label);
-  if (i === -1) a.labels.push(label);
-  else a.labels.splice(i, 1);
-  if (label === "stuck") {
-    if (hasLabel(a, "stuck") && !had) a.stuckSince = new Date().toISOString();
-    if (!hasLabel(a, "stuck")) { a.stuckSince = null; a.blocker = ""; }
-  }
-}
 
-function todayDateKey() {
-  const d = new Date();
-  return d.toISOString().slice(0,10);
-}
 function daysSince(iso) {
   if (!iso) return 0;
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -638,7 +677,7 @@ function daysSince(iso) {
 function ageBadgeData(updatedAtIso) {
   if (!updatedAtIso) return null;
   const ms = Date.now() - new Date(updatedAtIso).getTime();
-  if (ms < 3600000) return null; // < 1 hour, hide
+  if (ms < 3600000) return null;
   const hours = Math.floor(ms / 3600000);
   if (hours < 24) return { text: hours + "h", level: "fresh" };
   const days = Math.floor(hours / 24);
@@ -647,6 +686,7 @@ function ageBadgeData(updatedAtIso) {
   else if (days >= 7) level = "warn";
   return { text: days + "d", level };
 }
+function touchActionable(a) { a.updatedAt = new Date().toISOString(); }
 
 // ─── Project CRUD ──────────────────────────────────────
 function addProject() {
@@ -681,7 +721,9 @@ function addActionable(projId) {
   const p = findProject(projId); if (!p) return;
   const now = new Date().toISOString();
   p.actionables.push({
-    id: uid(), text: "", done: false, labels: [], blocker: "",
+    id: uid(), text: "", done: false,
+    status: null,
+    blocker: "", waitingFor: "",
     createdAt: now, updatedAt: now,
     priority: 0, stuckSince: null, doneAt: null
   });
@@ -692,7 +734,6 @@ function addActionable(projId) {
     if (last) last.focus();
   }, 0);
 }
-function touchActionable(a) { a.updatedAt = new Date().toISOString(); }
 function updateActionable(projId, itemId, field, value) {
   const p = findProject(projId); if (!p) return;
   const it = findActionable(p, itemId); if (!it) return;
@@ -709,10 +750,17 @@ function removeActionable(projId, itemId) {
   p.actionables = p.actionables.filter(a => a.id !== itemId);
   saveState(); renderAll();
 }
-function toggleActionableLabel(projId, itemId, label) {
+function setActionableStatus(projId, itemId, status) {
   const p = findProject(projId); if (!p) return;
   const a = findActionable(p, itemId); if (!a) return;
-  toggleLabel(a, label);
+  const prevStatus = a.status;
+  a.status = STATUSES.includes(status) ? status : null;
+  // Manage stuckSince timer
+  if (a.status === "stuck" && prevStatus !== "stuck") a.stuckSince = new Date().toISOString();
+  if (a.status !== "stuck") a.stuckSince = null;
+  // Clear context fields when leaving those statuses
+  if (a.status !== "stuck") a.blocker = "";
+  if (a.status !== "waiting") a.waitingFor = "";
   touchActionable(a);
   saveState(); renderAll();
 }
@@ -767,8 +815,7 @@ function setView(view) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
   document.getElementById('today-view').style.display = view === 'today' ? 'block' : 'none';
   document.getElementById('projects-view').style.display = view === 'projects' ? 'block' : 'none';
-  if (view === 'today') renderToday();
-  else renderProjects();
+  renderAll();
 }
 document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => setView(t.dataset.view));
@@ -777,27 +824,27 @@ document.querySelectorAll('.tab').forEach(t => {
 // ─── Date header ───────────────────────────────────────
 function renderDateHeader() {
   const now = new Date();
-  const opts = { weekday: "long", month: "long", day: "numeric" };
-  const formatted = now.toLocaleDateString("en-US", opts);
-  document.getElementById("header-date").textContent = formatted;
+  document.getElementById("header-date").textContent =
+    now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   document.getElementById("dd-date-text").textContent =
     now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-// ─── Daily progress dashboard ───────────────────────────
+// ─── Daily progress dashboard ──────────────────────────
 function renderDailyDashboard() {
   let todayTotal = 0, todayDone = 0;
-  let openTotal = 0, stuck = 0, waiting = 0;
+  let openTotal = 0, stuck = 0, waiting = 0, backburner = 0;
   state.projects.forEach(p => {
     p.actionables.forEach(a => {
-      if (hasLabel(a, "today")) {
+      if (a.status === "today") {
         todayTotal++;
         if (a.done) todayDone++;
       }
       if (!a.done) {
         openTotal++;
-        if (hasLabel(a, "stuck")) stuck++;
-        if (hasLabel(a, "waiting")) waiting++;
+        if (a.status === "stuck") stuck++;
+        else if (a.status === "waiting") waiting++;
+        else if (a.status === "backburner") backburner++;
       }
     });
   });
@@ -809,19 +856,18 @@ function renderDailyDashboard() {
   document.getElementById("dd-stats").innerHTML =
     "<strong>" + state.projects.length + "</strong> project" + (state.projects.length === 1 ? "" : "s");
 
-  const quick = document.getElementById("dd-quick");
-  quick.innerHTML =
+  document.getElementById("dd-quick").innerHTML =
     '<span><strong>' + openTotal + '</strong> open</span>' +
     '<span class="pill-stuck"><strong>' + stuck + '</strong> stuck</span>' +
-    '<span class="pill-waiting"><strong>' + waiting + '</strong> waiting</span>';
+    '<span class="pill-waiting"><strong>' + waiting + '</strong> waiting</span>' +
+    '<span class="pill-backburner"><strong>' + backburner + '</strong> backburner</span>';
 }
 
-// ─── Tab pill counts ───────────────────────────────────
 function renderTabPills() {
   let todayOpen = 0;
   state.projects.forEach(p => {
     p.actionables.forEach(a => {
-      if (!a.done && hasLabel(a, "today")) todayOpen++;
+      if (!a.done && a.status === "today") todayOpen++;
     });
   });
   document.getElementById("today-pill").textContent = todayOpen;
@@ -898,7 +944,7 @@ function renderLabelChip(p) {
 function renderProject(p) {
   const l = findLabel(p.labelId);
   const colorAttrs = l ? 'data-label-color="' + l.color + '" style="--proj-color:' + l.color + ';"' : '';
-  const pickerOpen = activePicker === p.id;
+  const pickerOpen = activeLabelPicker === p.id;
   let pickerHtml = "";
   if (pickerOpen) {
     const options = state.labels.map(ll =>
@@ -918,7 +964,6 @@ function renderProject(p) {
       '</div>';
   }
 
-  // Partition actionables: active, recently-done (<24h, still inline), archived (older done)
   const active = [];
   const recentDone = [];
   const archived = [];
@@ -940,8 +985,6 @@ function renderProject(p) {
       '</div>'
     : "";
 
-  const openCount = active.length;
-
   return (
     '<article class="project" data-project-id="' + p.id + '" ' + colorAttrs + '>' +
       '<div class="drag-handle" data-drag-handle>⋮⋮</div>' +
@@ -955,7 +998,7 @@ function renderProject(p) {
       '</div>' +
       '<input type="text" class="proj-goal" placeholder="Goal — what does success look like?" value="' + escapeAttr(p.goal) + '">' +
       '<div class="section-head">Actionables ' +
-        '<span class="count">' + openCount + ' open</span>' +
+        '<span class="count">' + active.length + ' open</span>' +
       '</div>' +
       '<ul class="items actionables-list">' +
         (visible.length === 0
@@ -969,35 +1012,68 @@ function renderProject(p) {
   );
 }
 
-function renderActionable(p, a) {
-  const isToday = hasLabel(a, "today");
-  const isStuck = hasLabel(a, "stuck");
-  const isWaiting = hasLabel(a, "waiting");
+function renderStatusChip(p, a) {
+  const s = a.status;
+  if (!s) {
+    return '<button class="status-chip unset" data-action="open-status-picker">Status</button>';
+  }
+  const meta = STATUS_META[s];
+  let label = meta.label;
+  if (s === "stuck" && a.stuckSince) {
+    const sD = daysSince(a.stuckSince);
+    if (sD >= 1) label = "Stuck · " + sD + "d";
+  }
+  return (
+    '<button class="status-chip ' + s + '" data-action="open-status-picker">' +
+      '<span class="dot" style="background:' + meta.color + ';"></span>' +
+      label +
+    '</button>'
+  );
+}
 
-  // Priority label
+function renderStatusPicker(p, a) {
+  const key = p.id + ":" + a.id;
+  if (activeStatusPicker !== key) return "";
+  const opts = STATUSES.map(s =>
+    '<div class="picker-option" data-action="set-status" data-status="' + s + '">' +
+      '<span class="dot" style="background:' + STATUS_META[s].color + ';"></span>' +
+      '<span>' + STATUS_META[s].label + '</span>' +
+    '</div>'
+  ).join("");
+  return (
+    '<div class="status-picker">' +
+      opts +
+      (a.status ? '<div class="picker-divider"></div><div class="picker-option clear" data-action="set-status" data-status="">Clear status</div>' : '') +
+    '</div>'
+  );
+}
+
+function renderActionable(p, a) {
   const prioLabels = ["P", "LOW", "MED", "HIGH"];
   const prioBtn = '<button class="priority-chip p-' + a.priority + '" data-action="cycle-priority" title="Cycle priority">' +
     (a.priority === 0 ? "P" : prioLabels[a.priority]) + '</button>';
 
-  // Age since last update
   const ageInfo = ageBadgeData(a.updatedAt || a.createdAt);
   const ageBadge = ageInfo
     ? '<span class="meta-badge level-' + ageInfo.level + '" title="Time since last update">' + ageInfo.text + '</span>'
     : "";
 
-  // Stuck-age append to Stuck button
-  let stuckLabel = "Stuck";
-  if (isStuck && a.stuckSince) {
-    const sD = daysSince(a.stuckSince);
-    if (sD >= 1) stuckLabel = "Stuck · " + sD + "d";
+  let contextRow = "";
+  if (a.status === "stuck") {
+    contextRow =
+      '<div class="context-row stuck">' +
+        '<span class="lbl">Blocker:</span>' +
+        '<input type="text" data-action="update-blocker" ' +
+          'placeholder="What\'s in the way?" value="' + escapeAttr(a.blocker || "") + '">' +
+      '</div>';
+  } else if (a.status === "waiting") {
+    contextRow =
+      '<div class="context-row waiting">' +
+        '<span class="lbl">Waiting for:</span>' +
+        '<input type="text" data-action="update-waiting-for" ' +
+          'placeholder="Who or what?" value="' + escapeAttr(a.waitingFor || "") + '">' +
+      '</div>';
   }
-
-  const blockerRow =
-    '<div class="blocker-row ' + (isStuck ? "" : "hidden") + '">' +
-      '<span class="lbl">Blocker:</span>' +
-      '<input type="text" data-action="update-blocker" ' +
-        'placeholder="What\'s in the way?" value="' + escapeAttr(a.blocker || "") + '">' +
-    '</div>';
 
   return (
     '<li data-item-id="' + a.id + '" class="' + (a.done ? "done" : "") + '">' +
@@ -1008,12 +1084,13 @@ function renderActionable(p, a) {
         '<input type="text" class="item-text" data-action="update-actionable" ' +
           'placeholder="What needs to be done?" value="' + escapeAttr(a.text) + '">' +
         ageBadge +
-        '<button class="label-btn today ' + (isToday ? "active" : "") + '" data-action="toggle-today">Today</button>' +
-        '<button class="label-btn stuck ' + (isStuck ? "active" : "") + '" data-action="toggle-stuck">' + stuckLabel + '</button>' +
-        '<button class="label-btn waiting ' + (isWaiting ? "active" : "") + '" data-action="toggle-waiting">Waiting</button>' +
+        '<div class="status-wrap">' +
+          renderStatusChip(p, a) +
+          renderStatusPicker(p, a) +
+        '</div>' +
         '<button class="li-rm" data-action="remove-actionable" title="Remove">×</button>' +
       '</div>' +
-      blockerRow +
+      contextRow +
     '</li>'
   );
 }
@@ -1023,8 +1100,7 @@ function wireProjects() {
   const container = document.getElementById("projects-container");
 
   container.querySelectorAll('[data-action]').forEach(el => {
-    const tag = el.tagName;
-    if (tag === "INPUT") return; // text/checkbox inputs handled separately
+    if (el.tagName === "INPUT") return;
     el.addEventListener("click", (e) => {
       e.stopPropagation();
       const action = el.dataset.action;
@@ -1033,27 +1109,37 @@ function wireProjects() {
       const item = el.closest('[data-item-id]');
       const itemId = item && item.dataset.itemId;
 
-      if (action === "delete-project")            deleteProject(projId);
-      else if (action === "add-actionable")       addActionable(projId);
-      else if (action === "remove-actionable")    removeActionable(projId, itemId);
-      else if (action === "toggle-today")         toggleActionableLabel(projId, itemId, "today");
-      else if (action === "toggle-stuck")         toggleActionableLabel(projId, itemId, "stuck");
-      else if (action === "toggle-waiting")       toggleActionableLabel(projId, itemId, "waiting");
-      else if (action === "cycle-priority")       cyclePriority(projId, itemId);
+      if (action === "delete-project")          deleteProject(projId);
+      else if (action === "add-actionable")     addActionable(projId);
+      else if (action === "remove-actionable")  removeActionable(projId, itemId);
+      else if (action === "cycle-priority")     cyclePriority(projId, itemId);
       else if (action === "toggle-done-footer") {
         if (expandedDone.has(projId)) expandedDone.delete(projId);
         else expandedDone.add(projId);
         renderProjects();
       }
       else if (action === "open-label-picker") {
-        activePicker = activePicker === projId ? null : projId;
+        activeLabelPicker = activeLabelPicker === projId ? null : projId;
+        activeStatusPicker = null;
         renderProjects();
       }
       else if (action === "set-label") {
         const labelId = el.dataset.labelId || null;
         setProjectLabel(projId, labelId);
-        activePicker = null;
+        activeLabelPicker = null;
         renderProjects();
+      }
+      else if (action === "open-status-picker") {
+        const key = projId + ":" + itemId;
+        activeStatusPicker = activeStatusPicker === key ? null : key;
+        activeLabelPicker = null;
+        renderProjects();
+      }
+      else if (action === "set-status") {
+        const status = el.dataset.status || null;
+        setActionableStatus(projId, itemId, status);
+        activeStatusPicker = null;
+        // setActionableStatus calls renderAll
       }
     });
   });
@@ -1101,18 +1187,30 @@ function wireProjects() {
       updateActionable(proj.dataset.projectId, item.dataset.itemId, "blocker", inp.value);
     });
   });
+
+  container.querySelectorAll('input[data-action="update-waiting-for"]').forEach(inp => {
+    inp.addEventListener("input", () => {
+      const proj = inp.closest('[data-project-id]');
+      const item = inp.closest('[data-item-id]');
+      if (!proj || !item) return;
+      updateActionable(proj.dataset.projectId, item.dataset.itemId, "waitingFor", inp.value);
+    });
+  });
 }
 
 document.addEventListener("click", (e) => {
-  if (activePicker && !e.target.closest('.label-picker') && !e.target.closest('[data-action="open-label-picker"]')) {
-    activePicker = null;
+  if (activeLabelPicker && !e.target.closest('.label-picker') && !e.target.closest('[data-action="open-label-picker"]')) {
+    activeLabelPicker = null;
+    renderProjects();
+  }
+  if (activeStatusPicker && !e.target.closest('.status-picker') && !e.target.closest('[data-action="open-status-picker"]')) {
+    activeStatusPicker = null;
     renderProjects();
   }
 });
 
 // ─── Drag and drop ─────────────────────────────────────
 function attachDragHandlers() {
-  // Project-level drag
   document.querySelectorAll('.project').forEach(article => {
     const handle = article.querySelector('[data-drag-handle]');
     if (!handle) return;
@@ -1147,7 +1245,6 @@ function attachDragHandlers() {
       reorderProjects(draggedId, targetId);
     });
 
-    // Actionable-level drag (within this project)
     article.querySelectorAll('.actionables-list > li').forEach(li => {
       const ah = li.querySelector('[data-item-drag-handle]');
       if (!ah) return;
@@ -1179,7 +1276,7 @@ function attachDragHandlers() {
         if (!draggedId) return;
         e.preventDefault();
         li.classList.remove("drag-over");
-        if (draggedProj !== article.dataset.projectId) return; // only within same project
+        if (draggedProj !== article.dataset.projectId) return;
         if (draggedId === li.dataset.itemId) return;
         reorderActionables(article.dataset.projectId, draggedId, li.dataset.itemId);
       });
@@ -1214,7 +1311,8 @@ function applySearchFilter() {
       const matches = !term ||
         projectMatches ||
         (item.text && item.text.toLowerCase().includes(term)) ||
-        (item.blocker && item.blocker.toLowerCase().includes(term));
+        (item.blocker && item.blocker.toLowerCase().includes(term)) ||
+        (item.waitingFor && item.waitingFor.toLowerCase().includes(term));
       li.classList.toggle("hidden-by-search", !matches);
       if (matches && !projectMatches) anyActionableMatches = true;
     });
@@ -1245,7 +1343,7 @@ function renderToday() {
   const container = document.getElementById("today-list-container");
   const groups = [];
   state.projects.forEach(p => {
-    const items = p.actionables.filter(a => hasLabel(a, "today"));
+    const items = p.actionables.filter(a => a.status === "today");
     if (items.length) groups.push({ project: p, items });
   });
 
@@ -1253,7 +1351,7 @@ function renderToday() {
     container.innerHTML =
       '<div class="empty-state">' +
         '<h2>Nothing on today</h2>' +
-        '<p>Open the Projects tab and tap <strong>Today</strong> on any actionable to plan your day.</p>' +
+        '<p>Open the Projects tab and set an actionable\'s status to <strong>Today</strong>.</p>' +
       '</div>';
     return;
   }
@@ -1288,16 +1386,10 @@ function renderToday() {
 }
 
 function renderTodayItem(p, a) {
-  const isStuck = hasLabel(a, "stuck");
-  const isWaiting = hasLabel(a, "waiting");
-  let badges = "";
-  if (isStuck) badges += '<div class="stuck-indicator">Stuck</div>';
-  if (isWaiting) badges += '<div class="waiting-indicator">Waiting</div>';
   return (
     '<div class="today-item' + (a.done ? " done" : "") + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
       '<input type="checkbox" data-action="today-toggle"' + (a.done ? " checked" : "") + '>' +
       '<div class="text">' + escapeAttr(a.text || "(untitled)") + '</div>' +
-      badges +
       '<div class="proj-tag" data-action="jump-to-project">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
     '</div>'
   );
@@ -1358,13 +1450,21 @@ function importDataFromFile(file) {
         if (p.labelId === undefined) p.labelId = null;
         if (!p.createdAt) p.createdAt = NOW;
         (p.actionables || []).forEach(a => {
-          if (!Array.isArray(a.labels)) a.labels = [];
+          if (a.status === undefined) {
+            const labs = Array.isArray(a.labels) ? a.labels : [];
+            if (labs.includes("stuck")) a.status = "stuck";
+            else if (labs.includes("today")) a.status = "today";
+            else if (labs.includes("waiting")) a.status = "waiting";
+            else a.status = null;
+          }
           if (typeof a.blocker !== "string") a.blocker = "";
+          if (typeof a.waitingFor !== "string") a.waitingFor = "";
           if (!a.createdAt) a.createdAt = NOW;
           if (!a.updatedAt) a.updatedAt = a.createdAt;
           if (typeof a.priority !== "number") a.priority = 0;
-          if (a.stuckSince === undefined) a.stuckSince = null;
+          if (a.stuckSince === undefined) a.stuckSince = a.status === "stuck" ? NOW : null;
           if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
+          delete a.labels;
           delete a.dueDate;
         });
       });
