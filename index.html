@@ -20,6 +20,9 @@
   --bad: #ef4444;
   --accent: #f59e0b;
   --waiting: #3b82f6;
+  --prio-high: #ef4444;
+  --prio-med: #eab308;
+  --prio-low: #3b82f6;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -35,12 +38,82 @@ body {
 
 /* Header */
 header {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 14px;
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 14px; gap: 12px; flex-wrap: wrap;
 }
 header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
-header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-variant-numeric: tabular-nums; }
+header .date { font-size: 12px; color: var(--text-3); margin-top: 4px; font-weight: 500; }
 .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Search */
+.search-wrap {
+  position: relative;
+}
+input.search {
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px;
+  padding: 7px 11px 7px 28px;
+  font-size: 12px; font-family: inherit;
+  width: 220px;
+  transition: border-color 0.15s, width 0.2s;
+}
+input.search:focus { outline: none; border-color: var(--accent); width: 280px; }
+input.search::placeholder { color: var(--text-4); }
+.search-wrap::before {
+  content: "⌕"; position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+  color: var(--text-4); font-size: 14px; pointer-events: none;
+}
+.search-wrap kbd {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  background: var(--border); color: var(--text-3);
+  padding: 1px 5px; border-radius: 3px;
+  font-size: 9px; font-family: inherit; font-weight: 500;
+  pointer-events: none;
+}
+input.search:focus + kbd { display: none; }
+
+/* Daily progress dashboard */
+.daily-dashboard {
+  background: linear-gradient(135deg, #1a1611 0%, #0e0c09 100%);
+  border: 1px solid rgba(245, 158, 11, 0.20);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 14px;
+}
+.daily-dashboard .dd-top {
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 10px;
+}
+.daily-dashboard .dd-date {
+  font-size: 13px; font-weight: 600; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.daily-dashboard .dd-stats {
+  font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums;
+}
+.daily-dashboard .dd-stats strong { color: var(--text); font-weight: 600; }
+.dd-progress-row {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 6px;
+}
+.dd-progress-bar {
+  flex: 1; height: 8px; background: rgba(255,255,255,0.05);
+  border-radius: 4px; overflow: hidden;
+}
+.dd-progress-bar > div {
+  height: 100%; background: linear-gradient(90deg, var(--good) 0%, #16a34a 100%);
+  transition: width 0.4s ease-out;
+}
+.dd-progress-label {
+  font-size: 12px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dd-quick {
+  font-size: 11px; color: var(--text-3); display: flex; gap: 16px; flex-wrap: wrap;
+}
+.dd-quick span strong { color: var(--text-2); font-weight: 600; }
+.dd-quick .pill-stuck { color: var(--bad); }
+.dd-quick .pill-waiting { color: var(--waiting); }
 
 /* Tabs */
 .tabs {
@@ -111,8 +184,7 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
 .color-swatches { display: flex; gap: 4px; flex-wrap: wrap; }
 .color-swatch {
   width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
-  border: 2px solid transparent;
-  transition: transform 0.1s;
+  border: 2px solid transparent; transition: transform 0.1s;
 }
 .color-swatch:hover { transform: scale(1.15); }
 .color-swatch.selected { border-color: var(--text); }
@@ -143,8 +215,8 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
 }
 .project.drag-over::before { opacity: 1; }
 .project.dragging { opacity: 0.4; }
+.project.hidden-by-search { display: none; }
 
-/* Colored left border for labeled projects */
 .project[data-label-color]::after {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0;
   width: 3px; background: var(--proj-color, transparent);
@@ -157,8 +229,7 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
   display: flex; align-items: center; justify-content: center;
   cursor: grab; opacity: 0;
   color: var(--text-4); font-size: 12px; line-height: 1;
-  user-select: none;
-  transition: opacity 0.15s;
+  user-select: none; transition: opacity 0.15s;
 }
 .project:hover .drag-handle { opacity: 1; }
 .drag-handle:hover { color: var(--text-2); }
@@ -176,8 +247,7 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
 
 .proj-header-row {
   display: flex; align-items: center; gap: 10px;
-  margin-bottom: 4px;
-  padding-right: 70px;
+  margin-bottom: 4px; padding-right: 70px;
 }
 .proj-name {
   flex: 1; min-width: 0; background: transparent; border: none;
@@ -227,16 +297,13 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
   width: 8px; height: 8px; border-radius: 50%; display: inline-block;
 }
 
-/* Label picker popover */
 .label-picker {
   position: absolute; top: 100%; right: 0;
   background: var(--card); border: 1px solid var(--border-strong);
   border-radius: 8px; padding: 6px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  z-index: 50; min-width: 180px;
-  margin-top: 4px;
+  z-index: 50; min-width: 180px; margin-top: 4px;
 }
-.label-picker.hidden { display: none; }
 .label-picker .picker-option {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 8px; border-radius: 5px;
@@ -246,33 +313,88 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
 .label-picker .picker-option .dot {
   width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
 }
-.label-picker .picker-divider {
-  height: 1px; background: var(--border); margin: 4px 0;
-}
+.label-picker .picker-divider { height: 1px; background: var(--border); margin: 4px 0; }
 .label-picker .picker-option.clear { color: var(--text-3); font-style: italic; }
 
 /* Items (actionables) */
 ul.items { list-style: none; }
 ul.items > li {
-  padding: 7px 0; border-bottom: 1px solid var(--border);
+  padding: 7px 0 7px 0; border-bottom: 1px solid var(--border);
+  position: relative;
 }
 ul.items > li:last-child { border-bottom: none; }
 ul.items > li:first-child { padding-top: 0; }
+ul.items > li.dragging { opacity: 0.4; }
+ul.items > li::before {
+  content: ""; position: absolute; left: -8px; right: 0; top: -1px;
+  height: 2px; background: var(--accent); border-radius: 1px;
+  opacity: 0;
+}
+ul.items > li.drag-over::before { opacity: 1; }
+ul.items > li.hidden-by-search { display: none; }
 
 .item-row {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap;
 }
+
+.item-drag-handle {
+  width: 12px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: grab; opacity: 0;
+  color: var(--text-4); font-size: 11px; line-height: 1;
+  user-select: none; transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+ul.items > li:hover .item-drag-handle { opacity: 1; }
+.item-drag-handle:active { cursor: grabbing; }
+
 ul.items input[type="checkbox"] {
   accent-color: var(--good); width: 15px; height: 15px; cursor: pointer; flex-shrink: 0;
 }
 ul.items input.item-text {
-  flex: 1; border: none; background: transparent;
+  flex: 1; min-width: 100px; border: none; background: transparent;
   font-size: 13px; color: var(--text); font-family: inherit;
-  padding: 3px 0; min-width: 0;
+  padding: 3px 0;
 }
 ul.items input.item-text:focus { outline: none; }
 ul.items input.item-text::placeholder { color: var(--text-4); }
 ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-through; }
+
+/* Priority chip */
+.priority-chip {
+  background: transparent; border: 1px solid var(--border-strong);
+  color: var(--text-4);
+  padding: 1px 6px; border-radius: 8px; font-size: 9px;
+  cursor: pointer; font-family: inherit; font-weight: 700;
+  letter-spacing: 0.04em; white-space: nowrap; flex-shrink: 0;
+  min-width: 22px; text-align: center;
+}
+.priority-chip:hover { background: var(--card-hover); color: var(--text-2); }
+.priority-chip.p-1 { background: rgba(59, 130, 246, 0.15); color: var(--prio-low); border-color: var(--prio-low); }
+.priority-chip.p-2 { background: rgba(234, 179, 8, 0.15); color: var(--prio-med); border-color: var(--prio-med); }
+.priority-chip.p-3 { background: rgba(239, 68, 68, 0.15); color: var(--prio-high); border-color: var(--prio-high); }
+
+/* Age / due date / stuck-age badges (inline meta) */
+.meta-badge {
+  font-size: 10px; color: var(--text-3); font-variant-numeric: tabular-nums;
+  white-space: nowrap; flex-shrink: 0;
+  padding: 1px 0;
+}
+.meta-badge.warn { color: var(--warn); }
+.meta-badge.bad { color: var(--bad); }
+
+.due-input {
+  background: transparent; border: 1px solid var(--border-strong);
+  color: var(--text-3); border-radius: 8px;
+  padding: 1px 6px; font-size: 10px; font-family: inherit;
+  cursor: pointer; flex-shrink: 0;
+  color-scheme: dark; width: auto;
+}
+.due-input:focus { outline: none; border-color: var(--accent); color: var(--text); }
+.due-input.has-value { color: var(--text-2); border-color: var(--border); }
+.due-input.overdue { background: rgba(239, 68, 68, 0.12); color: var(--bad); border-color: var(--bad); }
+.due-input.today { background: rgba(245, 158, 11, 0.15); color: var(--accent); border-color: var(--accent); }
 
 .label-btn {
   background: transparent; border: 1px solid var(--border-strong);
@@ -280,8 +402,7 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
   padding: 2px 8px; border-radius: 10px; font-size: 10px;
   cursor: pointer; font-family: inherit; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.04em;
-  white-space: nowrap;
-  flex-shrink: 0;
+  white-space: nowrap; flex-shrink: 0;
 }
 .label-btn:hover { background: var(--card-hover); color: var(--text-2); }
 .label-btn.active.today { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
@@ -297,9 +418,9 @@ ul.items .li-rm {
 ul.items li:hover .li-rm { opacity: 1; }
 ul.items .li-rm:hover { color: var(--bad); }
 
-/* Inline blocker row (under stuck actionables) */
+/* Inline blocker row */
 .blocker-row {
-  margin-top: 6px; margin-left: 23px;
+  margin-top: 6px; margin-left: 35px;
   display: flex; align-items: center; gap: 8px;
 }
 .blocker-row.hidden { display: none; }
@@ -318,12 +439,23 @@ ul.items .li-rm:hover { color: var(--bad); }
 .blocker-row input:focus { outline: none; border-color: var(--bad); }
 .blocker-row input::placeholder { color: var(--text-4); font-style: italic; }
 
+/* Done footer */
+.done-footer {
+  margin-top: 6px;
+  font-size: 11px; color: var(--text-4);
+  cursor: pointer; padding: 6px 0;
+  border-top: 1px dashed var(--border);
+  display: flex; align-items: center; gap: 6px;
+}
+.done-footer:hover { color: var(--text-2); }
+.done-footer .caret { font-size: 9px; }
+.done-footer.expanded { color: var(--text-3); }
+
 .empty-line {
   font-size: 11px; color: var(--text-4); font-style: italic;
   padding: 4px 0 6px;
 }
 
-/* Empty state */
 .empty-state {
   text-align: center; padding: 60px 20px;
   border: 1px dashed var(--border-strong); border-radius: 12px;
@@ -363,12 +495,8 @@ ul.items .li-rm:hover { color: var(--bad); }
   text-transform: uppercase; letter-spacing: 0.04em;
   white-space: nowrap;
 }
-.today-item .stuck-indicator {
-  color: var(--bad); background: rgba(239, 68, 68, 0.1);
-}
-.today-item .waiting-indicator {
-  color: var(--waiting); background: rgba(59, 130, 246, 0.1);
-}
+.today-item .stuck-indicator { color: var(--bad); background: rgba(239, 68, 68, 0.1); }
+.today-item .waiting-indicator { color: var(--waiting); background: rgba(59, 130, 246, 0.1); }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -381,16 +509,32 @@ ul.items .li-rm:hover { color: var(--bad); }
 <header>
   <div>
     <h1>Projects</h1>
-    <div class="counts" id="counts"></div>
+    <div class="date" id="header-date"></div>
   </div>
   <div class="header-actions">
     <input type="file" id="import-file" accept=".json" style="display:none;">
+    <div class="search-wrap">
+      <input type="text" class="search" id="search-input" placeholder="Search projects, actionables…">
+      <kbd>⌘K</kbd>
+    </div>
     <button class="btn ghost" id="labels-btn" title="Manage labels">Labels</button>
     <button class="btn ghost" id="import-btn" title="Import projects from JSON">Import</button>
     <button class="btn ghost" id="export-btn" title="Export projects as JSON">Export</button>
     <button class="btn accent" id="new-project">+ New project</button>
   </div>
 </header>
+
+<div class="daily-dashboard" id="daily-dashboard">
+  <div class="dd-top">
+    <div class="dd-date" id="dd-date-text"></div>
+    <div class="dd-stats" id="dd-stats"></div>
+  </div>
+  <div class="dd-progress-row">
+    <div class="dd-progress-bar"><div id="dd-progress-fill" style="width:0%"></div></div>
+    <div class="dd-progress-label" id="dd-progress-label">—</div>
+  </div>
+  <div class="dd-quick" id="dd-quick"></div>
+</div>
 
 <div class="labels-panel hidden" id="labels-panel">
   <h3>Labels</h3>
@@ -436,8 +580,10 @@ const COLOR_PALETTE = [
 ];
 
 // Migrate schema
+const NOW = new Date().toISOString();
 state.projects.forEach(p => {
   if (p.labelId === undefined) p.labelId = null;
+  if (!p.createdAt) p.createdAt = NOW;
   (p.actionables || []).forEach(a => {
     if (!Array.isArray(a.labels)) a.labels = [];
     if (Array.isArray(a.blockedBy) && a.blockedBy.length && Array.isArray(p.blockers)) {
@@ -447,6 +593,13 @@ state.projects.forEach(p => {
       if (texts.length && !a.blocker) a.blocker = texts.join("; ");
     }
     if (typeof a.blocker !== "string") a.blocker = "";
+    if (!a.createdAt) a.createdAt = p.createdAt || NOW;
+    if (typeof a.priority !== "number") a.priority = 0;
+    if (a.dueDate === undefined) a.dueDate = null;
+    if (a.stuckSince === undefined) {
+      a.stuckSince = (a.labels || []).includes("stuck") ? NOW : null;
+    }
+    if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
     delete a.blockedBy;
   });
   delete p.blockers;
@@ -455,6 +608,10 @@ saveState();
 
 let currentView = (window.localStorage.getItem("view") || "projects");
 let activePicker = null;
+let searchTerm = "";
+let expandedDone = new Set(); // project ids whose Done section is expanded
+
+const ARCHIVE_AFTER_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function uid() { return Math.random().toString(36).slice(2,10); }
 
@@ -468,15 +625,42 @@ function findActionable(p, id) { return p && p.actionables.find(a => a.id === id
 function findLabel(id) { return state.labels.find(l => l.id === id); }
 function hasLabel(a, label) { return (a.labels || []).includes(label); }
 function toggleLabel(a, label) {
+  const had = hasLabel(a, label);
   const i = a.labels.indexOf(label);
   if (i === -1) a.labels.push(label);
   else a.labels.splice(i, 1);
-  if (label === "stuck" && !hasLabel(a, "stuck")) a.blocker = "";
+  if (label === "stuck") {
+    if (hasLabel(a, "stuck") && !had) a.stuckSince = new Date().toISOString();
+    if (!hasLabel(a, "stuck")) { a.stuckSince = null; a.blocker = ""; }
+  }
+}
+
+function todayDateKey() {
+  const d = new Date();
+  return d.toISOString().slice(0,10);
+}
+function daysSince(iso) {
+  if (!iso) return 0;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+function dueDays(dateStr) {
+  if (!dateStr) return null;
+  const due = new Date(dateStr + "T23:59:59");
+  const now = new Date();
+  return Math.ceil((due - now) / 86400000);
+}
+function formatDateMD(dateStr) {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return (m + "/" + d);
 }
 
 // ─── Project CRUD ──────────────────────────────────────
 function addProject() {
-  const p = { id: uid(), name: "", goal: "", labelId: null, actionables: [], createdAt: new Date().toISOString() };
+  const p = {
+    id: uid(), name: "", goal: "", labelId: null,
+    actionables: [], createdAt: new Date().toISOString()
+  };
   state.projects.unshift(p);
   saveState(); renderAll();
   setTimeout(() => {
@@ -502,7 +686,11 @@ function setProjectLabel(projId, labelId) {
 // ─── Actionables ───────────────────────────────────────
 function addActionable(projId) {
   const p = findProject(projId); if (!p) return;
-  p.actionables.push({ id: uid(), text: "", done: false, labels: [], blocker: "" });
+  p.actionables.push({
+    id: uid(), text: "", done: false, labels: [], blocker: "",
+    createdAt: new Date().toISOString(),
+    priority: 0, dueDate: null, stuckSince: null, doneAt: null
+  });
   saveState(); renderProjects();
   setTimeout(() => {
     const items = document.querySelectorAll('[data-project-id="' + projId + '"] .actionables-list input.item-text');
@@ -513,6 +701,10 @@ function addActionable(projId) {
 function updateActionable(projId, itemId, field, value) {
   const p = findProject(projId); if (!p) return;
   const it = findActionable(p, itemId); if (!it) return;
+  if (field === "done") {
+    if (value && !it.done) it.doneAt = new Date().toISOString();
+    if (!value) it.doneAt = null;
+  }
   it[field] = value; saveState();
 }
 function removeActionable(projId, itemId) {
@@ -525,6 +717,29 @@ function toggleActionableLabel(projId, itemId, label) {
   const a = findActionable(p, itemId); if (!a) return;
   toggleLabel(a, label);
   saveState(); renderAll();
+}
+function cyclePriority(projId, itemId) {
+  const p = findProject(projId); if (!p) return;
+  const a = findActionable(p, itemId); if (!a) return;
+  a.priority = (a.priority + 1) % 4;
+  saveState(); renderProjects();
+}
+function setDueDate(projId, itemId, value) {
+  const p = findProject(projId); if (!p) return;
+  const a = findActionable(p, itemId); if (!a) return;
+  a.dueDate = value || null;
+  saveState(); renderProjects();
+}
+function reorderActionables(projId, draggedId, targetId) {
+  const p = findProject(projId); if (!p) return;
+  const draggedIdx = p.actionables.findIndex(a => a.id === draggedId);
+  if (draggedIdx === -1) return;
+  const dragged = p.actionables[draggedIdx];
+  p.actionables.splice(draggedIdx, 1);
+  const newTargetIdx = p.actionables.findIndex(a => a.id === targetId);
+  if (newTargetIdx === -1) { p.actionables.splice(draggedIdx, 0, dragged); return; }
+  p.actionables.splice(newTargetIdx, 0, dragged);
+  saveState(); renderProjects();
 }
 
 // ─── Labels CRUD ───────────────────────────────────────
@@ -566,30 +781,58 @@ document.querySelectorAll('.tab').forEach(t => {
   t.addEventListener('click', () => setView(t.dataset.view));
 });
 
-// ─── Counts ────────────────────────────────────────────
-function getCounts() {
-  let projects = state.projects.length;
-  let openActionables = 0, todayOpen = 0, stuckOpen = 0, waitingOpen = 0;
+// ─── Date header ───────────────────────────────────────
+function renderDateHeader() {
+  const now = new Date();
+  const opts = { weekday: "long", month: "long", day: "numeric" };
+  const formatted = now.toLocaleDateString("en-US", opts);
+  document.getElementById("header-date").textContent = formatted;
+  document.getElementById("dd-date-text").textContent =
+    now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+// ─── Daily progress dashboard ───────────────────────────
+function renderDailyDashboard() {
+  let todayTotal = 0, todayDone = 0;
+  let openTotal = 0, stuck = 0, waiting = 0;
   state.projects.forEach(p => {
     p.actionables.forEach(a => {
+      if (hasLabel(a, "today")) {
+        todayTotal++;
+        if (a.done) todayDone++;
+      }
       if (!a.done) {
-        openActionables++;
-        if (hasLabel(a, "today")) todayOpen++;
-        if (hasLabel(a, "stuck")) stuckOpen++;
-        if (hasLabel(a, "waiting")) waitingOpen++;
+        openTotal++;
+        if (hasLabel(a, "stuck")) stuck++;
+        if (hasLabel(a, "waiting")) waiting++;
       }
     });
   });
-  return { projects, openActionables, todayOpen, stuckOpen, waitingOpen };
+  const pct = todayTotal === 0 ? 0 : Math.round((todayDone / todayTotal) * 100);
+  document.getElementById("dd-progress-fill").style.width = pct + "%";
+  document.getElementById("dd-progress-label").textContent =
+    todayTotal === 0 ? "Nothing on today" :
+    todayDone + " / " + todayTotal + "  ·  " + pct + "%";
+  document.getElementById("dd-stats").innerHTML =
+    "<strong>" + state.projects.length + "</strong> project" + (state.projects.length === 1 ? "" : "s");
+
+  const quick = document.getElementById("dd-quick");
+  quick.innerHTML =
+    '<span><strong>' + openTotal + '</strong> open</span>' +
+    '<span class="pill-stuck"><strong>' + stuck + '</strong> stuck</span>' +
+    '<span class="pill-waiting"><strong>' + waiting + '</strong> waiting</span>';
 }
-function renderCounts() {
-  const c = getCounts();
-  document.getElementById("counts").textContent =
-    c.projects + " project" + (c.projects === 1 ? "" : "s") +
-    " · " + c.openActionables + " open · " +
-    c.todayOpen + " today · " + c.stuckOpen + " stuck · " + c.waitingOpen + " waiting";
-  document.getElementById("today-pill").textContent = c.todayOpen;
-  document.getElementById("projects-pill").textContent = c.projects;
+
+// ─── Tab pill counts ───────────────────────────────────
+function renderTabPills() {
+  let todayOpen = 0;
+  state.projects.forEach(p => {
+    p.actionables.forEach(a => {
+      if (!a.done && hasLabel(a, "today")) todayOpen++;
+    });
+  });
+  document.getElementById("today-pill").textContent = todayOpen;
+  document.getElementById("projects-pill").textContent = state.projects.length;
 }
 
 // ─── Render: Labels panel ─────────────────────────────
@@ -642,6 +885,7 @@ function renderProjects() {
     '</div>';
   wireProjects();
   attachDragHandlers();
+  applySearchFilter();
 }
 
 function renderLabelChip(p) {
@@ -680,6 +924,31 @@ function renderProject(p) {
           : '') +
       '</div>';
   }
+
+  // Partition actionables: active, recently-done (<24h, still inline), archived (older done)
+  const active = [];
+  const recentDone = [];
+  const archived = [];
+  p.actionables.forEach(a => {
+    if (!a.done) active.push(a);
+    else {
+      const age = a.doneAt ? (Date.now() - new Date(a.doneAt).getTime()) : ARCHIVE_AFTER_MS + 1;
+      if (age < ARCHIVE_AFTER_MS) recentDone.push(a);
+      else archived.push(a);
+    }
+  });
+  const showArchived = expandedDone.has(p.id);
+  const visible = active.concat(recentDone).concat(showArchived ? archived : []);
+
+  const doneFooter = archived.length > 0
+    ? '<div class="done-footer ' + (showArchived ? "expanded" : "") + '" data-action="toggle-done-footer">' +
+        '<span class="caret">' + (showArchived ? "▼" : "▶") + '</span>' +
+        (showArchived ? "Hide" : "Show") + ' ' + archived.length + ' completed' +
+      '</div>'
+    : "";
+
+  const openCount = active.length;
+
   return (
     '<article class="project" data-project-id="' + p.id + '" ' + colorAttrs + '>' +
       '<div class="drag-handle" data-drag-handle>⋮⋮</div>' +
@@ -693,15 +962,16 @@ function renderProject(p) {
       '</div>' +
       '<input type="text" class="proj-goal" placeholder="Goal — what does success look like?" value="' + escapeAttr(p.goal) + '">' +
       '<div class="section-head">Actionables ' +
-        '<span class="count">' + p.actionables.filter(a => !a.done).length + ' open</span>' +
+        '<span class="count">' + openCount + ' open</span>' +
       '</div>' +
       '<ul class="items actionables-list">' +
-        (p.actionables.length === 0
+        (visible.length === 0
           ? '<li style="border:none; padding:0;"><div class="empty-line">No actionables — add one below</div></li>'
-          : p.actionables.map(a => renderActionable(p, a)).join("")
+          : visible.map(a => renderActionable(p, a)).join("")
         ) +
       '</ul>' +
       '<button class="btn add-line" data-action="add-actionable">+ Add actionable</button>' +
+      doneFooter +
     '</article>'
   );
 }
@@ -710,20 +980,52 @@ function renderActionable(p, a) {
   const isToday = hasLabel(a, "today");
   const isStuck = hasLabel(a, "stuck");
   const isWaiting = hasLabel(a, "waiting");
+
+  // Priority label
+  const prioLabels = ["P", "LOW", "MED", "HIGH"];
+  const prioBtn = '<button class="priority-chip p-' + a.priority + '" data-action="cycle-priority" title="Cycle priority">' +
+    (a.priority === 0 ? "P" : prioLabels[a.priority]) + '</button>';
+
+  // Age (only show if >7 days)
+  const ageD = daysSince(a.createdAt);
+  const ageBadge = (ageD >= 7) ? '<span class="meta-badge" title="Age">' + ageD + 'd old</span>' : "";
+
+  // Stuck-age append to Stuck button
+  let stuckLabel = "Stuck";
+  if (isStuck && a.stuckSince) {
+    const sD = daysSince(a.stuckSince);
+    if (sD >= 1) stuckLabel = "Stuck · " + sD + "d";
+  }
+
+  // Due date
+  let dueClass = "";
+  if (a.dueDate) {
+    const d = dueDays(a.dueDate);
+    if (d < 0) dueClass = "overdue";
+    else if (d === 0) dueClass = "today";
+  }
+  const dueInput = '<input type="date" class="due-input ' + (a.dueDate ? "has-value " : "") + dueClass + '" ' +
+    'data-action="set-due" value="' + (a.dueDate || "") + '" title="Due date">';
+
   const blockerRow =
     '<div class="blocker-row ' + (isStuck ? "" : "hidden") + '">' +
       '<span class="lbl">Blocker:</span>' +
       '<input type="text" data-action="update-blocker" ' +
         'placeholder="What\'s in the way?" value="' + escapeAttr(a.blocker || "") + '">' +
     '</div>';
+
   return (
     '<li data-item-id="' + a.id + '" class="' + (a.done ? "done" : "") + '">' +
       '<div class="item-row">' +
+        '<span class="item-drag-handle" data-item-drag-handle>⋮⋮</span>' +
         '<input type="checkbox" data-action="toggle-actionable"' + (a.done ? " checked" : "") + '>' +
+        prioBtn +
         '<input type="text" class="item-text" data-action="update-actionable" ' +
           'placeholder="What needs to be done?" value="' + escapeAttr(a.text) + '">' +
+        ageBadge +
+        dueInput +
         '<button class="label-btn today ' + (isToday ? "active" : "") + '" data-action="toggle-today">Today</button>' +
-        '<button class="label-btn stuck ' + (isStuck ? "active" : "") + '" data-action="toggle-stuck">Stuck</button>' +
+        '<button class="label-btn stuck ' + (isStuck ? "active" : "") + '" data-action="toggle-stuck">' + stuckLabel + '</button>' +
         '<button class="label-btn waiting ' + (isWaiting ? "active" : "") + '" data-action="toggle-waiting">Waiting</button>' +
         '<button class="li-rm" data-action="remove-actionable" title="Remove">×</button>' +
       '</div>' +
@@ -737,7 +1039,16 @@ function wireProjects() {
   const container = document.getElementById("projects-container");
 
   container.querySelectorAll('[data-action]').forEach(el => {
-    if (el.tagName === "INPUT") return; // inputs handled separately
+    const tag = el.tagName;
+    if (tag === "INPUT" && el.type !== "date") return; // text/checkbox inputs handled separately
+    if (tag === "INPUT" && el.type === "date") {
+      el.addEventListener("change", () => {
+        const proj = el.closest('[data-project-id]');
+        const item = el.closest('[data-item-id]');
+        setDueDate(proj.dataset.projectId, item.dataset.itemId, el.value);
+      });
+      return;
+    }
     el.addEventListener("click", (e) => {
       e.stopPropagation();
       const action = el.dataset.action;
@@ -746,12 +1057,18 @@ function wireProjects() {
       const item = el.closest('[data-item-id]');
       const itemId = item && item.dataset.itemId;
 
-      if (action === "delete-project")          deleteProject(projId);
-      else if (action === "add-actionable")     addActionable(projId);
-      else if (action === "remove-actionable")  removeActionable(projId, itemId);
-      else if (action === "toggle-today")       toggleActionableLabel(projId, itemId, "today");
-      else if (action === "toggle-stuck")       toggleActionableLabel(projId, itemId, "stuck");
-      else if (action === "toggle-waiting")     toggleActionableLabel(projId, itemId, "waiting");
+      if (action === "delete-project")            deleteProject(projId);
+      else if (action === "add-actionable")       addActionable(projId);
+      else if (action === "remove-actionable")    removeActionable(projId, itemId);
+      else if (action === "toggle-today")         toggleActionableLabel(projId, itemId, "today");
+      else if (action === "toggle-stuck")         toggleActionableLabel(projId, itemId, "stuck");
+      else if (action === "toggle-waiting")       toggleActionableLabel(projId, itemId, "waiting");
+      else if (action === "cycle-priority")       cyclePriority(projId, itemId);
+      else if (action === "toggle-done-footer") {
+        if (expandedDone.has(projId)) expandedDone.delete(projId);
+        else expandedDone.add(projId);
+        renderProjects();
+      }
       else if (action === "open-label-picker") {
         activePicker = activePicker === projId ? null : projId;
         renderProjects();
@@ -770,8 +1087,7 @@ function wireProjects() {
       const proj = cb.closest('[data-project-id]');
       const item = cb.closest('[data-item-id]');
       updateActionable(proj.dataset.projectId, item.dataset.itemId, "done", cb.checked);
-      item.classList.toggle("done", cb.checked);
-      renderCounts();
+      renderAll();
     });
   });
 
@@ -780,6 +1096,7 @@ function wireProjects() {
       const proj = inp.closest('[data-project-id]');
       const field = inp.classList.contains("proj-name") ? "name" : "goal";
       updateProjectField(proj.dataset.projectId, field, inp.value);
+      if (searchTerm) applySearchFilter();
     });
   });
 
@@ -789,6 +1106,7 @@ function wireProjects() {
       const item = inp.closest('[data-item-id]');
       if (!proj || !item) return;
       updateActionable(proj.dataset.projectId, item.dataset.itemId, "text", inp.value);
+      if (searchTerm) applySearchFilter();
     });
     inp.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
@@ -809,7 +1127,6 @@ function wireProjects() {
   });
 }
 
-// Close label picker on outside click
 document.addEventListener("click", (e) => {
   if (activePicker && !e.target.closest('.label-picker') && !e.target.closest('[data-action="open-label-picker"]')) {
     activePicker = null;
@@ -817,20 +1134,20 @@ document.addEventListener("click", (e) => {
   }
 });
 
-// ─── Drag and drop reorder ─────────────────────────────
+// ─── Drag and drop ─────────────────────────────────────
 function attachDragHandlers() {
-  const articles = document.querySelectorAll('.project');
-  articles.forEach(article => {
+  // Project-level drag
+  document.querySelectorAll('.project').forEach(article => {
     const handle = article.querySelector('[data-drag-handle]');
     if (!handle) return;
-
     handle.addEventListener("mousedown", () => { article.draggable = true; });
     handle.addEventListener("mouseup", () => { article.draggable = false; });
-
     article.addEventListener("dragstart", (e) => {
+      if (!article.draggable) return;
+      e.stopPropagation();
       article.classList.add("dragging");
       e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", article.dataset.projectId);
+      e.dataTransfer.setData("application/x-project", article.dataset.projectId);
     });
     article.addEventListener("dragend", () => {
       article.classList.remove("dragging");
@@ -838,20 +1155,58 @@ function attachDragHandlers() {
       document.querySelectorAll('.project.drag-over').forEach(el => el.classList.remove("drag-over"));
     });
     article.addEventListener("dragover", (e) => {
+      if (!Array.from(e.dataTransfer.types).includes("application/x-project")) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "move";
       if (!article.classList.contains("dragging")) article.classList.add("drag-over");
     });
-    article.addEventListener("dragleave", () => {
-      article.classList.remove("drag-over");
-    });
+    article.addEventListener("dragleave", () => article.classList.remove("drag-over"));
     article.addEventListener("drop", (e) => {
+      const draggedId = e.dataTransfer.getData("application/x-project");
+      if (!draggedId) return;
       e.preventDefault();
       article.classList.remove("drag-over");
-      const draggedId = e.dataTransfer.getData("text/plain");
       const targetId = article.dataset.projectId;
-      if (!draggedId || draggedId === targetId) return;
+      if (draggedId === targetId) return;
       reorderProjects(draggedId, targetId);
+    });
+
+    // Actionable-level drag (within this project)
+    article.querySelectorAll('.actionables-list > li').forEach(li => {
+      const ah = li.querySelector('[data-item-drag-handle]');
+      if (!ah) return;
+      ah.addEventListener("mousedown", () => { li.draggable = true; });
+      ah.addEventListener("mouseup", () => { li.draggable = false; });
+      li.addEventListener("dragstart", (e) => {
+        if (!li.draggable) return;
+        e.stopPropagation();
+        li.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("application/x-actionable", li.dataset.itemId);
+        e.dataTransfer.setData("application/x-actionable-proj", article.dataset.projectId);
+      });
+      li.addEventListener("dragend", () => {
+        li.classList.remove("dragging");
+        li.draggable = false;
+        article.querySelectorAll('.actionables-list > li.drag-over').forEach(el => el.classList.remove("drag-over"));
+      });
+      li.addEventListener("dragover", (e) => {
+        if (!Array.from(e.dataTransfer.types).includes("application/x-actionable")) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (!li.classList.contains("dragging")) li.classList.add("drag-over");
+      });
+      li.addEventListener("dragleave", () => li.classList.remove("drag-over"));
+      li.addEventListener("drop", (e) => {
+        const draggedId = e.dataTransfer.getData("application/x-actionable");
+        const draggedProj = e.dataTransfer.getData("application/x-actionable-proj");
+        if (!draggedId) return;
+        e.preventDefault();
+        li.classList.remove("drag-over");
+        if (draggedProj !== article.dataset.projectId) return; // only within same project
+        if (draggedId === li.dataset.itemId) return;
+        reorderActionables(article.dataset.projectId, draggedId, li.dataset.itemId);
+      });
     });
   });
 }
@@ -866,6 +1221,48 @@ function reorderProjects(draggedId, targetId) {
   state.projects.splice(newTargetIdx, 0, dragged);
   saveState(); renderProjects();
 }
+
+// ─── Search ────────────────────────────────────────────
+function applySearchFilter() {
+  const term = searchTerm.trim().toLowerCase();
+  document.querySelectorAll('.project').forEach(article => {
+    const p = findProject(article.dataset.projectId);
+    if (!p) return;
+    let projectMatches = !term ||
+      (p.name && p.name.toLowerCase().includes(term)) ||
+      (p.goal && p.goal.toLowerCase().includes(term));
+    let anyActionableMatches = false;
+    article.querySelectorAll('.actionables-list > li').forEach(li => {
+      const item = findActionable(p, li.dataset.itemId);
+      if (!item) return;
+      const matches = !term ||
+        projectMatches ||
+        (item.text && item.text.toLowerCase().includes(term)) ||
+        (item.blocker && item.blocker.toLowerCase().includes(term));
+      li.classList.toggle("hidden-by-search", !matches);
+      if (matches && !projectMatches) anyActionableMatches = true;
+    });
+    article.classList.toggle("hidden-by-search", !!term && !projectMatches && !anyActionableMatches);
+  });
+}
+
+document.getElementById("search-input").addEventListener("input", (e) => {
+  searchTerm = e.target.value;
+  applySearchFilter();
+});
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+    e.preventDefault();
+    if (currentView !== "projects") setView("projects");
+    setTimeout(() => document.getElementById("search-input").focus(), 0);
+  }
+  if (e.key === "Escape" && document.activeElement === document.getElementById("search-input")) {
+    document.getElementById("search-input").value = "";
+    searchTerm = "";
+    applySearchFilter();
+    document.getElementById("search-input").blur();
+  }
+});
 
 // ─── Render: Today view ────────────────────────────────
 function renderToday() {
@@ -936,8 +1333,7 @@ function wireTodayView() {
     cb.addEventListener("change", () => {
       const wrap = cb.closest('.today-item');
       updateActionable(wrap.dataset.projectId, wrap.dataset.itemId, "done", cb.checked);
-      wrap.classList.toggle("done", cb.checked);
-      renderCounts();
+      renderAll();
     });
   });
   container.querySelectorAll('[data-action="jump-to-project"]').forEach(tag => {
@@ -953,7 +1349,9 @@ function wireTodayView() {
 }
 
 function renderAll() {
-  renderCounts();
+  renderDateHeader();
+  renderDailyDashboard();
+  renderTabPills();
   if (currentView === "today") renderToday();
   else renderProjects();
 }
@@ -982,9 +1380,15 @@ function importDataFromFile(file) {
       state.labels = state.labels || [];
       state.projects.forEach(p => {
         if (p.labelId === undefined) p.labelId = null;
+        if (!p.createdAt) p.createdAt = NOW;
         (p.actionables || []).forEach(a => {
           if (!Array.isArray(a.labels)) a.labels = [];
           if (typeof a.blocker !== "string") a.blocker = "";
+          if (!a.createdAt) a.createdAt = NOW;
+          if (typeof a.priority !== "number") a.priority = 0;
+          if (a.dueDate === undefined) a.dueDate = null;
+          if (a.stuckSince === undefined) a.stuckSince = null;
+          if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
         });
       });
       saveState();
