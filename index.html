@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Projects</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #09090b;
+  --card: #18181b;
+  --card-hover: #1f1f23;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --text: #fafafa;
+  --text-2: #a1a1aa;
+  --text-3: #71717a;
+  --text-4: #52525b;
+  --good: #22c55e;
+  --warn: #eab308;
+  --bad: #ef4444;
+  --accent: #f59e0b;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+  padding: 24px 20px 60px;
+  max-width: 980px;
+  margin: 0 auto;
+  font-size: 13px;
+}
+
+/* Header */
+header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 14px;
+}
+header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+.tab {
+  background: transparent; border: none; color: var(--text-3);
+  padding: 10px 16px; font-size: 13px; font-weight: 500;
+  cursor: pointer; font-family: inherit;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab .pill {
+  display: inline-block;
+  background: var(--card); color: var(--text-3);
+  padding: 1px 7px; border-radius: 8px; font-size: 10px;
+  font-variant-numeric: tabular-nums; font-weight: 600;
+}
+.tab.active .pill { background: var(--accent); color: #0a0a0a; }
+
+/* Buttons */
+.btn {
+  background: var(--text); color: var(--bg); border: none; border-radius: 6px;
+  padding: 8px 14px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;
+}
+.btn:hover { background: var(--text-2); }
+.btn.accent { background: var(--accent); color: #0a0a0a; }
+.btn.accent:hover { background: #fbbf24; }
+.btn.ghost {
+  background: transparent; border: 1px solid var(--border-strong);
+  color: var(--text-2); padding: 5px 10px; font-size: 11px;
+}
+.btn.ghost:hover { background: var(--card-hover); color: var(--text); }
+.btn.add-line {
+  background: transparent; border: 1px dashed var(--border-strong); color: var(--text-3);
+  padding: 6px 10px; font-size: 11px; width: 100%; text-align: left;
+  border-radius: 5px; margin-top: 4px;
+}
+.btn.add-line:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Project list */
+.projects { display: flex; flex-direction: column; gap: 14px; }
+
+.project {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  position: relative;
+}
+.project:hover { border-color: var(--border-strong); }
+.project .delete-btn {
+  position: absolute; top: 12px; right: 12px;
+  background: none; border: none; color: var(--text-4);
+  cursor: pointer; padding: 4px 8px; font-size: 11px;
+  border-radius: 5px; font-family: inherit;
+  opacity: 0; transition: opacity 0.15s;
+}
+.project:hover .delete-btn { opacity: 1; }
+.project .delete-btn:hover { color: var(--bad); background: rgba(239, 68, 68, 0.1); }
+
+.proj-name {
+  width: 100%; background: transparent; border: none;
+  font-size: 18px; font-weight: 600; letter-spacing: -0.01em;
+  color: var(--text); font-family: inherit; padding: 2px 0;
+  margin-bottom: 4px; padding-right: 80px;
+}
+.proj-name:focus { outline: none; }
+.proj-name::placeholder { color: var(--text-4); font-weight: 500; }
+
+.proj-goal {
+  width: 100%; background: transparent; border: none;
+  font-size: 13px; color: var(--text-2); font-family: inherit;
+  padding: 2px 0; margin-bottom: 14px;
+  border-bottom: 1px solid transparent;
+}
+.proj-goal:focus { outline: none; border-bottom-color: var(--border); }
+.proj-goal::placeholder { color: var(--text-4); font-style: italic; }
+
+.proj-cols {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 18px;
+}
+@media (max-width: 680px) { .proj-cols { grid-template-columns: 1fr; } }
+
+.proj-section { min-width: 0; }
+.proj-section h4 {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3);
+  margin-bottom: 8px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.proj-section h4 .count {
+  background: #27272a; color: var(--text-2);
+  border-radius: 3px; padding: 1px 6px; font-size: 9px;
+  font-weight: 600; letter-spacing: 0;
+}
+
+/* Items */
+ul.items { list-style: none; }
+ul.items > li {
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+}
+ul.items > li:last-child { border-bottom: none; }
+ul.items > li:first-child { padding-top: 0; }
+
+.item-row {
+  display: flex; align-items: center; gap: 8px;
+}
+ul.items input[type="checkbox"] {
+  accent-color: var(--good); width: 15px; height: 15px; cursor: pointer; flex-shrink: 0;
+}
+ul.items input.item-text {
+  flex: 1; border: none; background: transparent;
+  font-size: 13px; color: var(--text); font-family: inherit;
+  padding: 3px 0; min-width: 0;
+}
+ul.items input.item-text:focus { outline: none; }
+ul.items input.item-text::placeholder { color: var(--text-4); }
+ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-through; }
+
+.label-btn {
+  background: transparent; border: 1px solid var(--border-strong);
+  color: var(--text-3);
+  padding: 2px 8px; border-radius: 10px; font-size: 10px;
+  cursor: pointer; font-family: inherit; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.label-btn:hover { background: var(--card-hover); color: var(--text-2); }
+.label-btn.active.today { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
+.label-btn.active.stuck { background: var(--bad); color: #fafafa; border-color: var(--bad); }
+
+ul.items .age {
+  font-size: 10px; color: var(--text-3); font-variant-numeric: tabular-nums;
+  white-space: nowrap; flex-shrink: 0;
+}
+ul.items .age.warn { color: var(--warn); }
+ul.items .age.bad { color: var(--bad); }
+
+ul.items .li-rm {
+  background: none; border: none; color: var(--text-4); cursor: pointer;
+  font-size: 16px; line-height: 1; padding: 0 4px;
+  opacity: 0; transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+ul.items li:hover .li-rm { opacity: 1; }
+ul.items .li-rm:hover { color: var(--bad); }
+
+/* Linked blockers row (appears under stuck actionables) */
+.linked-row {
+  margin-top: 6px; margin-left: 23px;
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.linked-row .lbl {
+  font-size: 9px; color: var(--text-4);
+  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+}
+.blocker-chip {
+  background: transparent; border: 1px solid var(--border-strong);
+  color: var(--text-3);
+  padding: 2px 8px; border-radius: 10px; font-size: 11px;
+  cursor: pointer; font-family: inherit;
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.blocker-chip:hover { background: var(--card-hover); color: var(--text-2); }
+.blocker-chip.linked {
+  background: rgba(239, 68, 68, 0.12); border-color: var(--bad);
+  color: var(--bad);
+}
+.linked-row .no-blockers {
+  font-size: 11px; color: var(--text-4); font-style: italic;
+}
+
+.empty-line {
+  font-size: 11px; color: var(--text-4); font-style: italic;
+  padding: 4px 0 6px;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center; padding: 60px 20px;
+  border: 1px dashed var(--border-strong); border-radius: 12px;
+  color: var(--text-3);
+}
+.empty-state h2 { font-size: 16px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; }
+.empty-state p { font-size: 12px; margin-bottom: 14px; }
+
+/* Today view */
+.today-list { display: flex; flex-direction: column; gap: 6px; }
+.today-group { margin-bottom: 18px; }
+.today-group h3 {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-3); margin-bottom: 8px;
+}
+.today-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px;
+}
+.today-item input[type="checkbox"] {
+  accent-color: var(--good); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;
+}
+.today-item .text { flex: 1; font-size: 13px; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.today-item.done .text { color: var(--text-4); text-decoration: line-through; }
+.today-item .proj-tag {
+  font-size: 10px; color: var(--text-2);
+  background: var(--card-hover); padding: 3px 8px; border-radius: 8px;
+  font-weight: 500; cursor: pointer; white-space: nowrap;
+}
+.today-item .proj-tag:hover { background: #2a2a30; color: var(--text); }
+.today-item .stuck-indicator {
+  font-size: 10px; color: var(--bad);
+  background: rgba(239, 68, 68, 0.1);
+  padding: 3px 8px; border-radius: 8px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Projects</h1>
+    <div class="counts" id="counts"></div>
+  </div>
+  <div class="header-actions">
+    <input type="file" id="import-file" accept=".json" style="display:none;">
+    <button class="btn ghost" id="import-btn" title="Import projects from JSON">Import</button>
+    <button class="btn ghost" id="export-btn" title="Export projects as JSON">Export</button>
+    <button class="btn accent" id="new-project">+ New project</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab" data-view="today" id="tab-today">Today <span class="pill" id="today-pill">0</span></button>
+  <button class="tab" data-view="projects" id="tab-projects">Projects <span class="pill" id="projects-pill">0</span></button>
+</div>
+
+<div id="today-view" style="display:none;">
+  <div id="today-list-container"></div>
+</div>
+
+<div id="projects-view">
+  <div id="projects-container"></div>
+</div>
+
+<script>
+// ─── State ──────────────────────────────────────────────
+const STORE_KEY = "projects-v1";
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || { projects: [] }; }
+  catch(e) { return { projects: [] }; }
+}
+function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+let state = loadState();
+state.projects = state.projects || [];
+
+// Migrate: ensure every actionable has labels + blockedBy arrays
+state.projects.forEach(p => {
+  (p.actionables || []).forEach(a => {
+    if (!Array.isArray(a.labels)) a.labels = [];
+    if (!Array.isArray(a.blockedBy)) a.blockedBy = [];
+  });
+});
+saveState();
+
+let currentView = (window.localStorage.getItem("view") || "projects");
+
+function uid() { return Math.random().toString(36).slice(2,10); }
+
+// ─── Helpers ───────────────────────────────────────────
+function escapeAttr(s) {
+  const div = document.createElement("div");
+  div.textContent = s == null ? "" : String(s);
+  return div.innerHTML.replace(/"/g, "&quot;");
+}
+function ageDays(iso) { return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); }
+function ageLabel(days) { return days === 0 ? "today" : days === 1 ? "1d" : days + "d"; }
+
+function hasLabel(a, label) { return (a.labels || []).includes(label); }
+function toggleLabel(a, label) {
+  const i = a.labels.indexOf(label);
+  if (i === -1) a.labels.push(label);
+  else a.labels.splice(i, 1);
+  // If stuck removed, clear blockedBy too
+  if (label === "stuck" && !hasLabel(a, "stuck")) a.blockedBy = [];
+}
+
+// ─── Project CRUD ──────────────────────────────────────
+function addProject() {
+  const p = {
+    id: uid(), name: "", goal: "",
+    actionables: [], blockers: [],
+    createdAt: new Date().toISOString()
+  };
+  state.projects.unshift(p);
+  saveState(); renderAll();
+  setTimeout(() => {
+    const el = document.querySelector('[data-project-id="' + p.id + '"] .proj-name');
+    if (el) el.focus();
+  }, 0);
+}
+function deleteProject(id) {
+  if (!confirm("Delete this project? Its actionables and blockers will be removed.")) return;
+  state.projects = state.projects.filter(p => p.id !== id);
+  saveState(); renderAll();
+}
+function findProject(id) { return state.projects.find(p => p.id === id); }
+function findActionable(p, id) { return p && p.actionables.find(a => a.id === id); }
+function findBlocker(p, id) { return p && p.blockers.find(b => b.id === id); }
+
+function updateProjectField(id, field, value) {
+  const p = findProject(id); if (!p) return;
+  p[field] = value; saveState();
+}
+
+// ─── Actionables ───────────────────────────────────────
+function addActionable(projId) {
+  const p = findProject(projId); if (!p) return;
+  p.actionables.push({ id: uid(), text: "", done: false, labels: [], blockedBy: [] });
+  saveState(); renderProjects();
+  setTimeout(() => {
+    const items = document.querySelectorAll('[data-project-id="' + projId + '"] .actionables-list input.item-text');
+    const last = items[items.length - 1];
+    if (last) last.focus();
+  }, 0);
+}
+function updateActionable(projId, itemId, field, value) {
+  const p = findProject(projId); if (!p) return;
+  const it = findActionable(p, itemId); if (!it) return;
+  it[field] = value; saveState();
+}
+function removeActionable(projId, itemId) {
+  const p = findProject(projId); if (!p) return;
+  p.actionables = p.actionables.filter(a => a.id !== itemId);
+  saveState(); renderAll();
+}
+function toggleActionableLabel(projId, itemId, label) {
+  const p = findProject(projId); if (!p) return;
+  const a = findActionable(p, itemId); if (!a) return;
+  toggleLabel(a, label);
+  saveState(); renderAll();
+}
+function toggleBlockerLink(projId, itemId, blockerId) {
+  const p = findProject(projId); if (!p) return;
+  const a = findActionable(p, itemId); if (!a) return;
+  const i = a.blockedBy.indexOf(blockerId);
+  if (i === -1) a.blockedBy.push(blockerId);
+  else a.blockedBy.splice(i, 1);
+  saveState(); renderProjects();
+}
+
+// ─── Blockers ──────────────────────────────────────────
+function addBlocker(projId) {
+  const p = findProject(projId); if (!p) return;
+  p.blockers.push({ id: uid(), text: "", addedAt: new Date().toISOString() });
+  saveState(); renderProjects();
+  setTimeout(() => {
+    const items = document.querySelectorAll('[data-project-id="' + projId + '"] .blockers-list input.item-text');
+    const last = items[items.length - 1];
+    if (last) last.focus();
+  }, 0);
+}
+function updateBlocker(projId, itemId, text) {
+  const p = findProject(projId); if (!p) return;
+  const b = findBlocker(p, itemId); if (!b) return;
+  b.text = text; saveState();
+}
+function removeBlocker(projId, itemId) {
+  const p = findProject(projId); if (!p) return;
+  p.blockers = p.blockers.filter(b => b.id !== itemId);
+  // Also remove this blocker from any actionable's blockedBy
+  p.actionables.forEach(a => {
+    if (Array.isArray(a.blockedBy)) {
+      a.blockedBy = a.blockedBy.filter(bid => bid !== itemId);
+    }
+  });
+  saveState(); renderAll();
+}
+
+// ─── View switching ────────────────────────────────────
+function setView(view) {
+  currentView = view;
+  window.localStorage.setItem("view", view);
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
+  document.getElementById('today-view').style.display = view === 'today' ? 'block' : 'none';
+  document.getElementById('projects-view').style.display = view === 'projects' ? 'block' : 'none';
+  if (view === 'today') renderToday();
+  else renderProjects();
+}
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => setView(t.dataset.view));
+});
+
+// ─── Counts ────────────────────────────────────────────
+function getCounts() {
+  let projects = state.projects.length;
+  let totalActionables = 0, openActionables = 0, todayOpen = 0, stuckOpen = 0;
+  let totalBlockers = 0;
+  state.projects.forEach(p => {
+    totalBlockers += p.blockers.length;
+    p.actionables.forEach(a => {
+      totalActionables++;
+      if (!a.done) {
+        openActionables++;
+        if (hasLabel(a, "today")) todayOpen++;
+        if (hasLabel(a, "stuck")) stuckOpen++;
+      }
+    });
+  });
+  return { projects, totalActionables, openActionables, todayOpen, stuckOpen, totalBlockers };
+}
+
+function renderCounts() {
+  const c = getCounts();
+  document.getElementById("counts").textContent =
+    c.projects + " project" + (c.projects === 1 ? "" : "s") +
+    " · " + c.openActionables + " open · " +
+    c.todayOpen + " today · " + c.stuckOpen + " stuck · " +
+    c.totalBlockers + " blocker" + (c.totalBlockers === 1 ? "" : "s");
+  document.getElementById("today-pill").textContent = c.todayOpen;
+  document.getElementById("projects-pill").textContent = c.projects;
+}
+
+// ─── Render: Projects view ─────────────────────────────
+function renderProjects() {
+  const container = document.getElementById("projects-container");
+  if (state.projects.length === 0) {
+    container.innerHTML =
+      '<div class="empty-state">' +
+        '<h2>No projects yet</h2>' +
+        '<p>Hit <strong>+ New project</strong> to start.</p>' +
+      '</div>';
+    return;
+  }
+  container.innerHTML = '<div class="projects">' +
+    state.projects.map(renderProject).join("") +
+    '</div>';
+  wireProjects();
+}
+
+function renderProject(p) {
+  return (
+    '<article class="project" data-project-id="' + p.id + '">' +
+      '<button class="delete-btn" data-action="delete-project">Delete</button>' +
+      '<input type="text" class="proj-name" placeholder="Project name" value="' + escapeAttr(p.name) + '">' +
+      '<input type="text" class="proj-goal" placeholder="Goal — what does success look like?" value="' + escapeAttr(p.goal) + '">' +
+      '<div class="proj-cols">' +
+        '<div class="proj-section">' +
+          '<h4>Actionables ' +
+            '<span class="count">' + p.actionables.filter(a => !a.done).length + ' open</span>' +
+          '</h4>' +
+          '<ul class="items actionables-list">' +
+            (p.actionables.length === 0
+              ? '<li style="border:none; padding:0;"><div class="empty-line">No actionables — add one below</div></li>'
+              : p.actionables.map(a => renderActionable(p, a)).join("")
+            ) +
+          '</ul>' +
+          '<button class="btn add-line" data-action="add-actionable">+ Add actionable</button>' +
+        '</div>' +
+        '<div class="proj-section">' +
+          '<h4>Blockers ' +
+            '<span class="count">' + p.blockers.length + '</span>' +
+          '</h4>' +
+          '<ul class="items blockers-list">' +
+            (p.blockers.length === 0
+              ? '<li style="border:none; padding:0;"><div class="empty-line">Nothing blocking</div></li>'
+              : p.blockers.map(b => renderBlocker(p.id, b)).join("")
+            ) +
+          '</ul>' +
+          '<button class="btn add-line" data-action="add-blocker">+ Add blocker</button>' +
+        '</div>' +
+      '</div>' +
+    '</article>'
+  );
+}
+
+function renderActionable(p, a) {
+  const isToday = hasLabel(a, "today");
+  const isStuck = hasLabel(a, "stuck");
+  let linkedRow = "";
+  if (isStuck) {
+    if (p.blockers.length === 0) {
+      linkedRow =
+        '<div class="linked-row">' +
+          '<span class="lbl">Linked:</span>' +
+          '<span class="no-blockers">no blockers in this project — add one →</span>' +
+        '</div>';
+    } else {
+      linkedRow =
+        '<div class="linked-row">' +
+          '<span class="lbl">Linked:</span>' +
+          p.blockers.map(b => {
+            const linked = (a.blockedBy || []).includes(b.id);
+            return '<button class="blocker-chip ' + (linked ? "linked" : "") + '" ' +
+                   'data-action="toggle-link" data-blocker-id="' + b.id + '" title="' + escapeAttr(b.text || "(empty blocker)") + '">' +
+                   escapeAttr(b.text ? (b.text.length > 30 ? b.text.slice(0,28) + "…" : b.text) : "(empty)") +
+                   '</button>';
+          }).join("") +
+        '</div>';
+    }
+  }
+  return (
+    '<li data-item-id="' + a.id + '" class="' + (a.done ? "done" : "") + '">' +
+      '<div class="item-row">' +
+        '<input type="checkbox" data-action="toggle-actionable"' + (a.done ? " checked" : "") + '>' +
+        '<input type="text" class="item-text" data-action="update-actionable" ' +
+          'placeholder="What needs to be done?" value="' + escapeAttr(a.text) + '">' +
+        '<button class="label-btn today ' + (isToday ? "active" : "") + '" data-action="toggle-today">Today</button>' +
+        '<button class="label-btn stuck ' + (isStuck ? "active" : "") + '" data-action="toggle-stuck">Stuck' +
+          (isStuck && a.blockedBy && a.blockedBy.length ? " · " + a.blockedBy.length : "") +
+        '</button>' +
+        '<button class="li-rm" data-action="remove-actionable" title="Remove">×</button>' +
+      '</div>' +
+      linkedRow +
+    '</li>'
+  );
+}
+
+function renderBlocker(projId, b) {
+  const days = ageDays(b.addedAt);
+  const ageClass = days >= 7 ? "bad" : days >= 3 ? "warn" : "";
+  return (
+    '<li data-item-id="' + b.id + '">' +
+      '<div class="item-row">' +
+        '<input type="text" class="item-text" data-action="update-blocker" ' +
+          'placeholder="What\'s in the way?" value="' + escapeAttr(b.text) + '">' +
+        '<span class="age ' + ageClass + '">' + ageLabel(days) + '</span>' +
+        '<button class="li-rm" data-action="remove-blocker" title="Unblocked">×</button>' +
+      '</div>' +
+    '</li>'
+  );
+}
+
+// ─── Wire project events ───────────────────────────────
+function wireProjects() {
+  const container = document.getElementById("projects-container");
+
+  container.querySelectorAll('button[data-action]').forEach(el => {
+    el.addEventListener("click", () => {
+      const action = el.dataset.action;
+      const proj = el.closest('[data-project-id]');
+      const projId = proj && proj.dataset.projectId;
+      const item = el.closest('[data-item-id]');
+      const itemId = item && item.dataset.itemId;
+      const blockerId = el.dataset.blockerId;
+
+      if (action === "delete-project")      deleteProject(projId);
+      else if (action === "add-actionable") addActionable(projId);
+      else if (action === "remove-actionable") removeActionable(projId, itemId);
+      else if (action === "add-blocker")    addBlocker(projId);
+      else if (action === "remove-blocker") removeBlocker(projId, itemId);
+      else if (action === "toggle-today")   toggleActionableLabel(projId, itemId, "today");
+      else if (action === "toggle-stuck")   toggleActionableLabel(projId, itemId, "stuck");
+      else if (action === "toggle-link")    toggleBlockerLink(projId, itemId, blockerId);
+    });
+  });
+
+  container.querySelectorAll('input[type="checkbox"][data-action="toggle-actionable"]').forEach(cb => {
+    cb.addEventListener("change", () => {
+      const proj = cb.closest('[data-project-id]');
+      const item = cb.closest('[data-item-id]');
+      updateActionable(proj.dataset.projectId, item.dataset.itemId, "done", cb.checked);
+      item.classList.toggle("done", cb.checked);
+      renderCounts();
+    });
+  });
+
+  container.querySelectorAll('input.proj-name, input.proj-goal').forEach(inp => {
+    inp.addEventListener("input", () => {
+      const proj = inp.closest('[data-project-id]');
+      const field = inp.classList.contains("proj-name") ? "name" : "goal";
+      updateProjectField(proj.dataset.projectId, field, inp.value);
+    });
+  });
+
+  container.querySelectorAll('input.item-text').forEach(inp => {
+    inp.addEventListener("input", () => {
+      const proj = inp.closest('[data-project-id]');
+      const item = inp.closest('[data-item-id]');
+      if (!proj || !item) return;
+      const action = inp.dataset.action;
+      if (action === "update-actionable") updateActionable(proj.dataset.projectId, item.dataset.itemId, "text", inp.value);
+      else if (action === "update-blocker") updateBlocker(proj.dataset.projectId, item.dataset.itemId, inp.value);
+    });
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const proj = inp.closest('[data-project-id]');
+        if (!proj) return;
+        const action = inp.dataset.action;
+        if (action === "update-actionable") addActionable(proj.dataset.projectId);
+        else if (action === "update-blocker") addBlocker(proj.dataset.projectId);
+      }
+    });
+  });
+}
+
+// ─── Render: Today view ────────────────────────────────
+function renderToday() {
+  const container = document.getElementById("today-list-container");
+  // Collect all today-labeled actionables, grouped by project
+  const groups = [];
+  state.projects.forEach(p => {
+    const items = p.actionables.filter(a => hasLabel(a, "today"));
+    if (items.length) groups.push({ project: p, items });
+  });
+
+  if (groups.length === 0) {
+    container.innerHTML =
+      '<div class="empty-state">' +
+        '<h2>Nothing on today</h2>' +
+        '<p>Open the Projects tab and tap <strong>Today</strong> on any actionable to plan your day.</p>' +
+      '</div>';
+    return;
+  }
+
+  // Sort within each: open first, then done
+  groups.forEach(g => {
+    g.items.sort((x, y) => (x.done === y.done ? 0 : x.done ? 1 : -1));
+  });
+
+  container.innerHTML = groups.map(g => {
+    const openCount = g.items.filter(i => !i.done).length;
+    return (
+      '<div class="today-group">' +
+        '<h3>' + escapeAttr(g.project.name || "(untitled project)") +
+          ' <span style="color:var(--text-4); font-weight:400; text-transform:none; letter-spacing:0; margin-left:6px;">' +
+            openCount + ' / ' + g.items.length +
+          '</span>' +
+        '</h3>' +
+        '<div class="today-list">' +
+          g.items.map(a => renderTodayItem(g.project, a)).join("") +
+        '</div>' +
+      '</div>'
+    );
+  }).join("");
+
+  wireTodayView();
+}
+
+function renderTodayItem(p, a) {
+  const isStuck = hasLabel(a, "stuck");
+  const blockedByCount = (a.blockedBy || []).length;
+  let stuckBadge = "";
+  if (isStuck) {
+    stuckBadge = '<div class="stuck-indicator">Stuck' + (blockedByCount ? " · " + blockedByCount : "") + '</div>';
+  }
+  return (
+    '<div class="today-item' + (a.done ? " done" : "") + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
+      '<input type="checkbox" data-action="today-toggle"' + (a.done ? " checked" : "") + '>' +
+      '<div class="text">' + escapeAttr(a.text || "(untitled)") + '</div>' +
+      stuckBadge +
+      '<div class="proj-tag" data-action="jump-to-project">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
+    '</div>'
+  );
+}
+
+function wireTodayView() {
+  const container = document.getElementById("today-list-container");
+  container.querySelectorAll('input[type="checkbox"][data-action="today-toggle"]').forEach(cb => {
+    cb.addEventListener("change", () => {
+      const wrap = cb.closest('.today-item');
+      updateActionable(wrap.dataset.projectId, wrap.dataset.itemId, "done", cb.checked);
+      wrap.classList.toggle("done", cb.checked);
+      renderCounts();
+    });
+  });
+  container.querySelectorAll('[data-action="jump-to-project"]').forEach(tag => {
+    tag.addEventListener("click", () => {
+      setView("projects");
+      // Scroll the project into view
+      setTimeout(() => {
+        const wrap = tag.closest('.today-item');
+        const el = document.querySelector('[data-project-id="' + wrap.dataset.projectId + '"]');
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 0);
+    });
+  });
+}
+
+// ─── Render all ────────────────────────────────────────
+function renderAll() {
+  renderCounts();
+  if (currentView === "today") renderToday();
+  else renderProjects();
+}
+
+// ─── Export / Import ──────────────────────────────────
+function exportData() {
+  const data = JSON.stringify(state, null, 2);
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "projects-" + new Date().toISOString().slice(0,10) + ".json";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function importDataFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!parsed.projects || !Array.isArray(parsed.projects)) throw new Error("Missing 'projects' array");
+      if (!confirm("This will replace your current projects with the imported file. Continue?")) return;
+      state = parsed;
+      state.projects.forEach(p => {
+        (p.actionables || []).forEach(a => {
+          if (!Array.isArray(a.labels)) a.labels = [];
+          if (!Array.isArray(a.blockedBy)) a.blockedBy = [];
+        });
+      });
+      saveState();
+      renderAll();
+      alert("✓ Imported " + state.projects.length + " projects");
+    } catch (err) {
+      alert("Couldn't read that file: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+document.getElementById("export-btn").addEventListener("click", exportData);
+document.getElementById("import-btn").addEventListener("click", () => document.getElementById("import-file").click());
+document.getElementById("import-file").addEventListener("change", (e) => {
+  if (e.target.files[0]) importDataFromFile(e.target.files[0]);
+  e.target.value = "";
+});
+
+// ─── Init ──────────────────────────────────────────────
+document.getElementById("new-project").addEventListener("click", () => {
+  setView("projects");
+  addProject();
+});
+setView(currentView);
+</script>
+
+</body>
+</html>
