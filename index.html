@@ -375,26 +375,17 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
 .priority-chip.p-2 { background: rgba(234, 179, 8, 0.15); color: var(--prio-med); border-color: var(--prio-med); }
 .priority-chip.p-3 { background: rgba(239, 68, 68, 0.15); color: var(--prio-high); border-color: var(--prio-high); }
 
-/* Age / due date / stuck-age badges (inline meta) */
+/* Age badge (since last update) */
 .meta-badge {
-  font-size: 10px; color: var(--text-3); font-variant-numeric: tabular-nums;
+  font-size: 10px; font-variant-numeric: tabular-nums;
   white-space: nowrap; flex-shrink: 0;
-  padding: 1px 0;
+  padding: 1px 6px; border-radius: 8px;
+  font-weight: 500;
 }
-.meta-badge.warn { color: var(--warn); }
-.meta-badge.bad { color: var(--bad); }
-
-.due-input {
-  background: transparent; border: 1px solid var(--border-strong);
-  color: var(--text-3); border-radius: 8px;
-  padding: 1px 6px; font-size: 10px; font-family: inherit;
-  cursor: pointer; flex-shrink: 0;
-  color-scheme: dark; width: auto;
-}
-.due-input:focus { outline: none; border-color: var(--accent); color: var(--text); }
-.due-input.has-value { color: var(--text-2); border-color: var(--border); }
-.due-input.overdue { background: rgba(239, 68, 68, 0.12); color: var(--bad); border-color: var(--bad); }
-.due-input.today { background: rgba(245, 158, 11, 0.15); color: var(--accent); border-color: var(--accent); }
+.meta-badge.level-fresh  { color: var(--text-4); }
+.meta-badge.level-normal { color: var(--text-3); }
+.meta-badge.level-warn   { color: var(--warn); background: rgba(234, 179, 8, 0.10); }
+.meta-badge.level-bad    { color: var(--bad);  background: rgba(239, 68, 68, 0.10); }
 
 .label-btn {
   background: transparent; border: 1px solid var(--border-strong);
@@ -594,13 +585,14 @@ state.projects.forEach(p => {
     }
     if (typeof a.blocker !== "string") a.blocker = "";
     if (!a.createdAt) a.createdAt = p.createdAt || NOW;
+    if (!a.updatedAt) a.updatedAt = a.createdAt;
     if (typeof a.priority !== "number") a.priority = 0;
-    if (a.dueDate === undefined) a.dueDate = null;
     if (a.stuckSince === undefined) {
       a.stuckSince = (a.labels || []).includes("stuck") ? NOW : null;
     }
     if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
     delete a.blockedBy;
+    delete a.dueDate;
   });
   delete p.blockers;
 });
@@ -643,16 +635,17 @@ function daysSince(iso) {
   if (!iso) return 0;
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 }
-function dueDays(dateStr) {
-  if (!dateStr) return null;
-  const due = new Date(dateStr + "T23:59:59");
-  const now = new Date();
-  return Math.ceil((due - now) / 86400000);
-}
-function formatDateMD(dateStr) {
-  if (!dateStr) return "";
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return (m + "/" + d);
+function ageBadgeData(updatedAtIso) {
+  if (!updatedAtIso) return null;
+  const ms = Date.now() - new Date(updatedAtIso).getTime();
+  if (ms < 3600000) return null; // < 1 hour, hide
+  const hours = Math.floor(ms / 3600000);
+  if (hours < 24) return { text: hours + "h", level: "fresh" };
+  const days = Math.floor(hours / 24);
+  let level = "normal";
+  if (days >= 14) level = "bad";
+  else if (days >= 7) level = "warn";
+  return { text: days + "d", level };
 }
 
 // ─── Project CRUD ──────────────────────────────────────
@@ -686,10 +679,11 @@ function setProjectLabel(projId, labelId) {
 // ─── Actionables ───────────────────────────────────────
 function addActionable(projId) {
   const p = findProject(projId); if (!p) return;
+  const now = new Date().toISOString();
   p.actionables.push({
     id: uid(), text: "", done: false, labels: [], blocker: "",
-    createdAt: new Date().toISOString(),
-    priority: 0, dueDate: null, stuckSince: null, doneAt: null
+    createdAt: now, updatedAt: now,
+    priority: 0, stuckSince: null, doneAt: null
   });
   saveState(); renderProjects();
   setTimeout(() => {
@@ -698,6 +692,7 @@ function addActionable(projId) {
     if (last) last.focus();
   }, 0);
 }
+function touchActionable(a) { a.updatedAt = new Date().toISOString(); }
 function updateActionable(projId, itemId, field, value) {
   const p = findProject(projId); if (!p) return;
   const it = findActionable(p, itemId); if (!it) return;
@@ -705,7 +700,9 @@ function updateActionable(projId, itemId, field, value) {
     if (value && !it.done) it.doneAt = new Date().toISOString();
     if (!value) it.doneAt = null;
   }
-  it[field] = value; saveState();
+  it[field] = value;
+  touchActionable(it);
+  saveState();
 }
 function removeActionable(projId, itemId) {
   const p = findProject(projId); if (!p) return;
@@ -716,18 +713,14 @@ function toggleActionableLabel(projId, itemId, label) {
   const p = findProject(projId); if (!p) return;
   const a = findActionable(p, itemId); if (!a) return;
   toggleLabel(a, label);
+  touchActionable(a);
   saveState(); renderAll();
 }
 function cyclePriority(projId, itemId) {
   const p = findProject(projId); if (!p) return;
   const a = findActionable(p, itemId); if (!a) return;
   a.priority = (a.priority + 1) % 4;
-  saveState(); renderProjects();
-}
-function setDueDate(projId, itemId, value) {
-  const p = findProject(projId); if (!p) return;
-  const a = findActionable(p, itemId); if (!a) return;
-  a.dueDate = value || null;
+  touchActionable(a);
   saveState(); renderProjects();
 }
 function reorderActionables(projId, draggedId, targetId) {
@@ -986,9 +979,11 @@ function renderActionable(p, a) {
   const prioBtn = '<button class="priority-chip p-' + a.priority + '" data-action="cycle-priority" title="Cycle priority">' +
     (a.priority === 0 ? "P" : prioLabels[a.priority]) + '</button>';
 
-  // Age (only show if >7 days)
-  const ageD = daysSince(a.createdAt);
-  const ageBadge = (ageD >= 7) ? '<span class="meta-badge" title="Age">' + ageD + 'd old</span>' : "";
+  // Age since last update
+  const ageInfo = ageBadgeData(a.updatedAt || a.createdAt);
+  const ageBadge = ageInfo
+    ? '<span class="meta-badge level-' + ageInfo.level + '" title="Time since last update">' + ageInfo.text + '</span>'
+    : "";
 
   // Stuck-age append to Stuck button
   let stuckLabel = "Stuck";
@@ -996,16 +991,6 @@ function renderActionable(p, a) {
     const sD = daysSince(a.stuckSince);
     if (sD >= 1) stuckLabel = "Stuck · " + sD + "d";
   }
-
-  // Due date
-  let dueClass = "";
-  if (a.dueDate) {
-    const d = dueDays(a.dueDate);
-    if (d < 0) dueClass = "overdue";
-    else if (d === 0) dueClass = "today";
-  }
-  const dueInput = '<input type="date" class="due-input ' + (a.dueDate ? "has-value " : "") + dueClass + '" ' +
-    'data-action="set-due" value="' + (a.dueDate || "") + '" title="Due date">';
 
   const blockerRow =
     '<div class="blocker-row ' + (isStuck ? "" : "hidden") + '">' +
@@ -1023,7 +1008,6 @@ function renderActionable(p, a) {
         '<input type="text" class="item-text" data-action="update-actionable" ' +
           'placeholder="What needs to be done?" value="' + escapeAttr(a.text) + '">' +
         ageBadge +
-        dueInput +
         '<button class="label-btn today ' + (isToday ? "active" : "") + '" data-action="toggle-today">Today</button>' +
         '<button class="label-btn stuck ' + (isStuck ? "active" : "") + '" data-action="toggle-stuck">' + stuckLabel + '</button>' +
         '<button class="label-btn waiting ' + (isWaiting ? "active" : "") + '" data-action="toggle-waiting">Waiting</button>' +
@@ -1040,15 +1024,7 @@ function wireProjects() {
 
   container.querySelectorAll('[data-action]').forEach(el => {
     const tag = el.tagName;
-    if (tag === "INPUT" && el.type !== "date") return; // text/checkbox inputs handled separately
-    if (tag === "INPUT" && el.type === "date") {
-      el.addEventListener("change", () => {
-        const proj = el.closest('[data-project-id]');
-        const item = el.closest('[data-item-id]');
-        setDueDate(proj.dataset.projectId, item.dataset.itemId, el.value);
-      });
-      return;
-    }
+    if (tag === "INPUT") return; // text/checkbox inputs handled separately
     el.addEventListener("click", (e) => {
       e.stopPropagation();
       const action = el.dataset.action;
@@ -1385,10 +1361,11 @@ function importDataFromFile(file) {
           if (!Array.isArray(a.labels)) a.labels = [];
           if (typeof a.blocker !== "string") a.blocker = "";
           if (!a.createdAt) a.createdAt = NOW;
+          if (!a.updatedAt) a.updatedAt = a.createdAt;
           if (typeof a.priority !== "number") a.priority = 0;
-          if (a.dueDate === undefined) a.dueDate = null;
           if (a.stuckSince === undefined) a.stuckSince = null;
           if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
+          delete a.dueDate;
         });
       });
       saveState();
