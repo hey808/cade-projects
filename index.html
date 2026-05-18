@@ -19,6 +19,7 @@
   --warn: #eab308;
   --bad: #ef4444;
   --accent: #f59e0b;
+  --waiting: #3b82f6;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -45,7 +46,7 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
 .tabs {
   display: flex; gap: 4px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 .tab {
   background: transparent; border: none; color: var(--text-3);
@@ -81,9 +82,47 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
 .btn.add-line {
   background: transparent; border: 1px dashed var(--border-strong); color: var(--text-3);
   padding: 6px 10px; font-size: 11px; width: 100%; text-align: left;
-  border-radius: 5px; margin-top: 4px;
+  border-radius: 5px; margin-top: 6px;
 }
 .btn.add-line:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Labels management panel */
+.labels-panel {
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.labels-panel.hidden { display: none; }
+.labels-panel h3 {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-3); margin-bottom: 10px;
+}
+.label-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0; border-bottom: 1px solid var(--border);
+}
+.label-row:last-of-type { border-bottom: none; }
+.label-row input.label-name {
+  flex: 1; background: transparent; border: none;
+  font-size: 13px; color: var(--text); font-family: inherit;
+  padding: 4px 0; min-width: 0;
+}
+.label-row input.label-name:focus { outline: none; }
+.label-row input.label-name::placeholder { color: var(--text-4); }
+.color-swatches { display: flex; gap: 4px; flex-wrap: wrap; }
+.color-swatch {
+  width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.1s;
+}
+.color-swatch:hover { transform: scale(1.15); }
+.color-swatch.selected { border-color: var(--text); }
+.label-row .li-rm {
+  background: none; border: none; color: var(--text-4); cursor: pointer;
+  font-size: 16px; line-height: 1; padding: 0 4px;
+  opacity: 0; transition: opacity 0.15s;
+}
+.label-row:hover .li-rm { opacity: 1; }
+.label-row .li-rm:hover { color: var(--bad); }
 
 /* Project list */
 .projects { display: flex; flex-direction: column; gap: 14px; }
@@ -92,10 +131,39 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 16px 18px 16px 22px;
   position: relative;
+  transition: opacity 0.15s;
 }
 .project:hover { border-color: var(--border-strong); }
+.project::before {
+  content: ""; position: absolute; left: 0; right: 0; top: -3px;
+  height: 2px; background: var(--accent); border-radius: 1px;
+  opacity: 0; transition: opacity 0.15s;
+}
+.project.drag-over::before { opacity: 1; }
+.project.dragging { opacity: 0.4; }
+
+/* Colored left border for labeled projects */
+.project[data-label-color]::after {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; background: var(--proj-color, transparent);
+  border-radius: 12px 0 0 12px;
+}
+
+.drag-handle {
+  position: absolute; left: 4px; top: 16px;
+  width: 14px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: grab; opacity: 0;
+  color: var(--text-4); font-size: 12px; line-height: 1;
+  user-select: none;
+  transition: opacity 0.15s;
+}
+.project:hover .drag-handle { opacity: 1; }
+.drag-handle:hover { color: var(--text-2); }
+.drag-handle:active { cursor: grabbing; }
+
 .project .delete-btn {
   position: absolute; top: 12px; right: 12px;
   background: none; border: none; color: var(--text-4);
@@ -106,11 +174,15 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
 .project:hover .delete-btn { opacity: 1; }
 .project .delete-btn:hover { color: var(--bad); background: rgba(239, 68, 68, 0.1); }
 
+.proj-header-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 4px;
+  padding-right: 70px;
+}
 .proj-name {
-  width: 100%; background: transparent; border: none;
+  flex: 1; min-width: 0; background: transparent; border: none;
   font-size: 18px; font-weight: 600; letter-spacing: -0.01em;
   color: var(--text); font-family: inherit; padding: 2px 0;
-  margin-bottom: 4px; padding-right: 80px;
 }
 .proj-name:focus { outline: none; }
 .proj-name::placeholder { color: var(--text-4); font-weight: 500; }
@@ -124,31 +196,65 @@ header .counts { font-size: 11px; color: var(--text-3); margin-top: 3px; font-va
 .proj-goal:focus { outline: none; border-bottom-color: var(--border); }
 .proj-goal::placeholder { color: var(--text-4); font-style: italic; }
 
-.proj-cols {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  gap: 18px;
-}
-@media (max-width: 680px) { .proj-cols { grid-template-columns: 1fr; } }
-
-.proj-section { min-width: 0; }
-.proj-section h4 {
+.section-head {
   font-size: 10px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--text-3);
   margin-bottom: 8px;
   display: flex; justify-content: space-between; align-items: center;
 }
-.proj-section h4 .count {
+.section-head .count {
   background: #27272a; color: var(--text-2);
   border-radius: 3px; padding: 1px 6px; font-size: 9px;
   font-weight: 600; letter-spacing: 0;
 }
 
-/* Items */
+/* Project label chip */
+.label-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px; border-radius: 11px;
+  font-size: 10px; font-weight: 600;
+  cursor: pointer; font-family: inherit; border: 1px solid transparent;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.label-chip.unset {
+  background: transparent; color: var(--text-4);
+  border-color: var(--border-strong);
+}
+.label-chip.unset:hover { color: var(--text-2); border-color: var(--border); }
+.label-chip .dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+}
+
+/* Label picker popover */
+.label-picker {
+  position: absolute; top: 100%; right: 0;
+  background: var(--card); border: 1px solid var(--border-strong);
+  border-radius: 8px; padding: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 50; min-width: 180px;
+  margin-top: 4px;
+}
+.label-picker.hidden { display: none; }
+.label-picker .picker-option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 5px;
+  cursor: pointer; font-size: 12px;
+}
+.label-picker .picker-option:hover { background: var(--card-hover); }
+.label-picker .picker-option .dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+}
+.label-picker .picker-divider {
+  height: 1px; background: var(--border); margin: 4px 0;
+}
+.label-picker .picker-option.clear { color: var(--text-3); font-style: italic; }
+
+/* Items (actionables) */
 ul.items { list-style: none; }
 ul.items > li {
-  padding: 6px 0; border-bottom: 1px solid var(--border);
+  padding: 7px 0; border-bottom: 1px solid var(--border);
 }
 ul.items > li:last-child { border-bottom: none; }
 ul.items > li:first-child { padding-top: 0; }
@@ -180,13 +286,7 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
 .label-btn:hover { background: var(--card-hover); color: var(--text-2); }
 .label-btn.active.today { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
 .label-btn.active.stuck { background: var(--bad); color: #fafafa; border-color: var(--bad); }
-
-ul.items .age {
-  font-size: 10px; color: var(--text-3); font-variant-numeric: tabular-nums;
-  white-space: nowrap; flex-shrink: 0;
-}
-ul.items .age.warn { color: var(--warn); }
-ul.items .age.bad { color: var(--bad); }
+.label-btn.active.waiting { background: var(--waiting); color: #fafafa; border-color: var(--waiting); }
 
 ul.items .li-rm {
   background: none; border: none; color: var(--text-4); cursor: pointer;
@@ -197,30 +297,26 @@ ul.items .li-rm {
 ul.items li:hover .li-rm { opacity: 1; }
 ul.items .li-rm:hover { color: var(--bad); }
 
-/* Linked blockers row (appears under stuck actionables) */
-.linked-row {
+/* Inline blocker row (under stuck actionables) */
+.blocker-row {
   margin-top: 6px; margin-left: 23px;
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 8px;
 }
-.linked-row .lbl {
-  font-size: 9px; color: var(--text-4);
+.blocker-row.hidden { display: none; }
+.blocker-row .lbl {
+  font-size: 9px; color: var(--bad);
   text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+  white-space: nowrap;
 }
-.blocker-chip {
-  background: transparent; border: 1px solid var(--border-strong);
-  color: var(--text-3);
-  padding: 2px 8px; border-radius: 10px; font-size: 11px;
-  cursor: pointer; font-family: inherit;
-  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.blocker-row input {
+  flex: 1; background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 5px;
+  color: var(--text); font-family: inherit;
+  padding: 4px 8px; font-size: 12px;
 }
-.blocker-chip:hover { background: var(--card-hover); color: var(--text-2); }
-.blocker-chip.linked {
-  background: rgba(239, 68, 68, 0.12); border-color: var(--bad);
-  color: var(--bad);
-}
-.linked-row .no-blockers {
-  font-size: 11px; color: var(--text-4); font-style: italic;
-}
+.blocker-row input:focus { outline: none; border-color: var(--bad); }
+.blocker-row input::placeholder { color: var(--text-4); font-style: italic; }
 
 .empty-line {
   font-size: 11px; color: var(--text-4); font-style: italic;
@@ -242,6 +338,7 @@ ul.items .li-rm:hover { color: var(--bad); }
 .today-group h3 {
   font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--text-3); margin-bottom: 8px;
+  display: flex; align-items: center; gap: 8px;
 }
 .today-item {
   display: flex; align-items: center; gap: 10px;
@@ -259,12 +356,18 @@ ul.items .li-rm:hover { color: var(--bad); }
   font-weight: 500; cursor: pointer; white-space: nowrap;
 }
 .today-item .proj-tag:hover { background: #2a2a30; color: var(--text); }
-.today-item .stuck-indicator {
-  font-size: 10px; color: var(--bad);
-  background: rgba(239, 68, 68, 0.1);
+.today-item .stuck-indicator,
+.today-item .waiting-indicator {
+  font-size: 10px;
   padding: 3px 8px; border-radius: 8px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.04em;
   white-space: nowrap;
+}
+.today-item .stuck-indicator {
+  color: var(--bad); background: rgba(239, 68, 68, 0.1);
+}
+.today-item .waiting-indicator {
+  color: var(--waiting); background: rgba(59, 130, 246, 0.1);
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -282,11 +385,18 @@ ul.items .li-rm:hover { color: var(--bad); }
   </div>
   <div class="header-actions">
     <input type="file" id="import-file" accept=".json" style="display:none;">
+    <button class="btn ghost" id="labels-btn" title="Manage labels">Labels</button>
     <button class="btn ghost" id="import-btn" title="Import projects from JSON">Import</button>
     <button class="btn ghost" id="export-btn" title="Export projects as JSON">Export</button>
     <button class="btn accent" id="new-project">+ New project</button>
   </div>
 </header>
+
+<div class="labels-panel hidden" id="labels-panel">
+  <h3>Labels</h3>
+  <div id="labels-list"></div>
+  <button class="btn add-line" id="add-label-btn">+ New label</button>
+</div>
 
 <div class="tabs">
   <button class="tab" data-view="today" id="tab-today">Today <span class="pill" id="today-pill">0</span></button>
@@ -305,51 +415,68 @@ ul.items .li-rm:hover { color: var(--bad); }
 // ─── State ──────────────────────────────────────────────
 const STORE_KEY = "projects-v1";
 function loadState() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || { projects: [] }; }
-  catch(e) { return { projects: [] }; }
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || { projects: [], labels: [] }; }
+  catch(e) { return { projects: [], labels: [] }; }
 }
 function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
 let state = loadState();
 state.projects = state.projects || [];
+state.labels = state.labels || [];
 
-// Migrate: ensure every actionable has labels + blockedBy arrays
+const COLOR_PALETTE = [
+  { name: "purple", hex: "#a855f7" },
+  { name: "blue",   hex: "#3b82f6" },
+  { name: "cyan",   hex: "#06b6d4" },
+  { name: "green",  hex: "#22c55e" },
+  { name: "yellow", hex: "#eab308" },
+  { name: "orange", hex: "#f97316" },
+  { name: "red",    hex: "#ef4444" },
+  { name: "pink",   hex: "#ec4899" },
+  { name: "gray",   hex: "#71717a" }
+];
+
+// Migrate schema
 state.projects.forEach(p => {
+  if (p.labelId === undefined) p.labelId = null;
   (p.actionables || []).forEach(a => {
     if (!Array.isArray(a.labels)) a.labels = [];
-    if (!Array.isArray(a.blockedBy)) a.blockedBy = [];
+    if (Array.isArray(a.blockedBy) && a.blockedBy.length && Array.isArray(p.blockers)) {
+      const texts = a.blockedBy
+        .map(bid => (p.blockers.find(b => b.id === bid) || {}).text)
+        .filter(Boolean);
+      if (texts.length && !a.blocker) a.blocker = texts.join("; ");
+    }
+    if (typeof a.blocker !== "string") a.blocker = "";
+    delete a.blockedBy;
   });
+  delete p.blockers;
 });
 saveState();
 
 let currentView = (window.localStorage.getItem("view") || "projects");
+let activePicker = null;
 
 function uid() { return Math.random().toString(36).slice(2,10); }
 
-// ─── Helpers ───────────────────────────────────────────
 function escapeAttr(s) {
   const div = document.createElement("div");
   div.textContent = s == null ? "" : String(s);
   return div.innerHTML.replace(/"/g, "&quot;");
 }
-function ageDays(iso) { return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000); }
-function ageLabel(days) { return days === 0 ? "today" : days === 1 ? "1d" : days + "d"; }
-
+function findProject(id) { return state.projects.find(p => p.id === id); }
+function findActionable(p, id) { return p && p.actionables.find(a => a.id === id); }
+function findLabel(id) { return state.labels.find(l => l.id === id); }
 function hasLabel(a, label) { return (a.labels || []).includes(label); }
 function toggleLabel(a, label) {
   const i = a.labels.indexOf(label);
   if (i === -1) a.labels.push(label);
   else a.labels.splice(i, 1);
-  // If stuck removed, clear blockedBy too
-  if (label === "stuck" && !hasLabel(a, "stuck")) a.blockedBy = [];
+  if (label === "stuck" && !hasLabel(a, "stuck")) a.blocker = "";
 }
 
 // ─── Project CRUD ──────────────────────────────────────
 function addProject() {
-  const p = {
-    id: uid(), name: "", goal: "",
-    actionables: [], blockers: [],
-    createdAt: new Date().toISOString()
-  };
+  const p = { id: uid(), name: "", goal: "", labelId: null, actionables: [], createdAt: new Date().toISOString() };
   state.projects.unshift(p);
   saveState(); renderAll();
   setTimeout(() => {
@@ -358,23 +485,24 @@ function addProject() {
   }, 0);
 }
 function deleteProject(id) {
-  if (!confirm("Delete this project? Its actionables and blockers will be removed.")) return;
+  if (!confirm("Delete this project? Its actionables will be removed.")) return;
   state.projects = state.projects.filter(p => p.id !== id);
   saveState(); renderAll();
 }
-function findProject(id) { return state.projects.find(p => p.id === id); }
-function findActionable(p, id) { return p && p.actionables.find(a => a.id === id); }
-function findBlocker(p, id) { return p && p.blockers.find(b => b.id === id); }
-
 function updateProjectField(id, field, value) {
   const p = findProject(id); if (!p) return;
   p[field] = value; saveState();
+}
+function setProjectLabel(projId, labelId) {
+  const p = findProject(projId); if (!p) return;
+  p.labelId = labelId || null;
+  saveState(); renderProjects();
 }
 
 // ─── Actionables ───────────────────────────────────────
 function addActionable(projId) {
   const p = findProject(projId); if (!p) return;
-  p.actionables.push({ id: uid(), text: "", done: false, labels: [], blockedBy: [] });
+  p.actionables.push({ id: uid(), text: "", done: false, labels: [], blocker: "" });
   saveState(); renderProjects();
   setTimeout(() => {
     const items = document.querySelectorAll('[data-project-id="' + projId + '"] .actionables-list input.item-text');
@@ -398,41 +526,30 @@ function toggleActionableLabel(projId, itemId, label) {
   toggleLabel(a, label);
   saveState(); renderAll();
 }
-function toggleBlockerLink(projId, itemId, blockerId) {
-  const p = findProject(projId); if (!p) return;
-  const a = findActionable(p, itemId); if (!a) return;
-  const i = a.blockedBy.indexOf(blockerId);
-  if (i === -1) a.blockedBy.push(blockerId);
-  else a.blockedBy.splice(i, 1);
-  saveState(); renderProjects();
-}
 
-// ─── Blockers ──────────────────────────────────────────
-function addBlocker(projId) {
-  const p = findProject(projId); if (!p) return;
-  p.blockers.push({ id: uid(), text: "", addedAt: new Date().toISOString() });
-  saveState(); renderProjects();
+// ─── Labels CRUD ───────────────────────────────────────
+function addLabel() {
+  const used = state.labels.map(l => l.color);
+  const next = COLOR_PALETTE.find(c => !used.includes(c.hex)) || COLOR_PALETTE[0];
+  state.labels.push({ id: uid(), name: "", color: next.hex });
+  saveState(); renderLabelsPanel();
   setTimeout(() => {
-    const items = document.querySelectorAll('[data-project-id="' + projId + '"] .blockers-list input.item-text');
-    const last = items[items.length - 1];
+    const inputs = document.querySelectorAll("#labels-list .label-name");
+    const last = inputs[inputs.length - 1];
     if (last) last.focus();
   }, 0);
 }
-function updateBlocker(projId, itemId, text) {
-  const p = findProject(projId); if (!p) return;
-  const b = findBlocker(p, itemId); if (!b) return;
-  b.text = text; saveState();
+function updateLabel(id, field, value) {
+  const l = findLabel(id); if (!l) return;
+  l[field] = value; saveState();
+  if (field === "color") renderLabelsPanel();
+  renderProjects();
 }
-function removeBlocker(projId, itemId) {
-  const p = findProject(projId); if (!p) return;
-  p.blockers = p.blockers.filter(b => b.id !== itemId);
-  // Also remove this blocker from any actionable's blockedBy
-  p.actionables.forEach(a => {
-    if (Array.isArray(a.blockedBy)) {
-      a.blockedBy = a.blockedBy.filter(bid => bid !== itemId);
-    }
-  });
-  saveState(); renderAll();
+function deleteLabel(id) {
+  if (!confirm("Delete this label? Projects using it will become unlabeled.")) return;
+  state.labels = state.labels.filter(l => l.id !== id);
+  state.projects.forEach(p => { if (p.labelId === id) p.labelId = null; });
+  saveState(); renderLabelsPanel(); renderAll();
 }
 
 // ─── View switching ────────────────────────────────────
@@ -452,31 +569,61 @@ document.querySelectorAll('.tab').forEach(t => {
 // ─── Counts ────────────────────────────────────────────
 function getCounts() {
   let projects = state.projects.length;
-  let totalActionables = 0, openActionables = 0, todayOpen = 0, stuckOpen = 0;
-  let totalBlockers = 0;
+  let openActionables = 0, todayOpen = 0, stuckOpen = 0, waitingOpen = 0;
   state.projects.forEach(p => {
-    totalBlockers += p.blockers.length;
     p.actionables.forEach(a => {
-      totalActionables++;
       if (!a.done) {
         openActionables++;
         if (hasLabel(a, "today")) todayOpen++;
         if (hasLabel(a, "stuck")) stuckOpen++;
+        if (hasLabel(a, "waiting")) waitingOpen++;
       }
     });
   });
-  return { projects, totalActionables, openActionables, todayOpen, stuckOpen, totalBlockers };
+  return { projects, openActionables, todayOpen, stuckOpen, waitingOpen };
 }
-
 function renderCounts() {
   const c = getCounts();
   document.getElementById("counts").textContent =
     c.projects + " project" + (c.projects === 1 ? "" : "s") +
     " · " + c.openActionables + " open · " +
-    c.todayOpen + " today · " + c.stuckOpen + " stuck · " +
-    c.totalBlockers + " blocker" + (c.totalBlockers === 1 ? "" : "s");
+    c.todayOpen + " today · " + c.stuckOpen + " stuck · " + c.waitingOpen + " waiting";
   document.getElementById("today-pill").textContent = c.todayOpen;
   document.getElementById("projects-pill").textContent = c.projects;
+}
+
+// ─── Render: Labels panel ─────────────────────────────
+function renderLabelsPanel() {
+  const list = document.getElementById("labels-list");
+  if (state.labels.length === 0) {
+    list.innerHTML = '<div class="empty-line" style="text-align:center; padding:8px 0;">No labels yet — hit "+ New label" to add one</div>';
+    return;
+  }
+  list.innerHTML = state.labels.map(l => {
+    const swatches = COLOR_PALETTE.map(c =>
+      '<div class="color-swatch ' + (l.color === c.hex ? "selected" : "") + '" ' +
+        'data-color="' + c.hex + '" data-label-id="' + l.id + '" ' +
+        'style="background:' + c.hex + ';" title="' + c.name + '"></div>'
+    ).join("");
+    return (
+      '<div class="label-row" data-label-id="' + l.id + '">' +
+        '<input type="text" class="label-name" data-label-id="' + l.id + '" ' +
+          'placeholder="Label name (e.g. Work)" value="' + escapeAttr(l.name) + '">' +
+        '<div class="color-swatches">' + swatches + '</div>' +
+        '<button class="li-rm" data-label-id="' + l.id + '" title="Delete label">×</button>' +
+      '</div>'
+    );
+  }).join("");
+
+  list.querySelectorAll('input.label-name').forEach(inp => {
+    inp.addEventListener("input", () => updateLabel(inp.dataset.labelId, "name", inp.value));
+  });
+  list.querySelectorAll('.color-swatch').forEach(sw => {
+    sw.addEventListener("click", () => updateLabel(sw.dataset.labelId, "color", sw.dataset.color));
+  });
+  list.querySelectorAll('.li-rm').forEach(rm => {
+    rm.addEventListener("click", () => deleteLabel(rm.dataset.labelId));
+  });
 }
 
 // ─── Render: Projects view ─────────────────────────────
@@ -494,40 +641,67 @@ function renderProjects() {
     state.projects.map(renderProject).join("") +
     '</div>';
   wireProjects();
+  attachDragHandlers();
+}
+
+function renderLabelChip(p) {
+  const l = findLabel(p.labelId);
+  if (!l) {
+    return '<button class="label-chip unset" data-action="open-label-picker">+ Label</button>';
+  }
+  return (
+    '<button class="label-chip" data-action="open-label-picker" ' +
+      'style="background:' + l.color + '22; color:' + l.color + '; border-color:' + l.color + '55;">' +
+      '<span class="dot" style="background:' + l.color + ';"></span>' +
+      escapeAttr(l.name || "Unnamed") +
+    '</button>'
+  );
 }
 
 function renderProject(p) {
+  const l = findLabel(p.labelId);
+  const colorAttrs = l ? 'data-label-color="' + l.color + '" style="--proj-color:' + l.color + ';"' : '';
+  const pickerOpen = activePicker === p.id;
+  let pickerHtml = "";
+  if (pickerOpen) {
+    const options = state.labels.map(ll =>
+      '<div class="picker-option" data-action="set-label" data-label-id="' + ll.id + '">' +
+        '<span class="dot" style="background:' + ll.color + ';"></span>' +
+        '<span>' + escapeAttr(ll.name || "Unnamed") + '</span>' +
+      '</div>'
+    ).join("");
+    pickerHtml =
+      '<div class="label-picker">' +
+        (state.labels.length === 0
+          ? '<div class="picker-option" style="cursor:default; color:var(--text-4);">No labels yet — create one in the Labels panel</div>'
+          : options) +
+        (state.labels.length > 0
+          ? '<div class="picker-divider"></div><div class="picker-option clear" data-action="set-label" data-label-id="">Clear label</div>'
+          : '') +
+      '</div>';
+  }
   return (
-    '<article class="project" data-project-id="' + p.id + '">' +
+    '<article class="project" data-project-id="' + p.id + '" ' + colorAttrs + '>' +
+      '<div class="drag-handle" data-drag-handle>⋮⋮</div>' +
       '<button class="delete-btn" data-action="delete-project">Delete</button>' +
-      '<input type="text" class="proj-name" placeholder="Project name" value="' + escapeAttr(p.name) + '">' +
-      '<input type="text" class="proj-goal" placeholder="Goal — what does success look like?" value="' + escapeAttr(p.goal) + '">' +
-      '<div class="proj-cols">' +
-        '<div class="proj-section">' +
-          '<h4>Actionables ' +
-            '<span class="count">' + p.actionables.filter(a => !a.done).length + ' open</span>' +
-          '</h4>' +
-          '<ul class="items actionables-list">' +
-            (p.actionables.length === 0
-              ? '<li style="border:none; padding:0;"><div class="empty-line">No actionables — add one below</div></li>'
-              : p.actionables.map(a => renderActionable(p, a)).join("")
-            ) +
-          '</ul>' +
-          '<button class="btn add-line" data-action="add-actionable">+ Add actionable</button>' +
-        '</div>' +
-        '<div class="proj-section">' +
-          '<h4>Blockers ' +
-            '<span class="count">' + p.blockers.length + '</span>' +
-          '</h4>' +
-          '<ul class="items blockers-list">' +
-            (p.blockers.length === 0
-              ? '<li style="border:none; padding:0;"><div class="empty-line">Nothing blocking</div></li>'
-              : p.blockers.map(b => renderBlocker(p.id, b)).join("")
-            ) +
-          '</ul>' +
-          '<button class="btn add-line" data-action="add-blocker">+ Add blocker</button>' +
+      '<div class="proj-header-row">' +
+        '<input type="text" class="proj-name" placeholder="Project name" value="' + escapeAttr(p.name) + '">' +
+        '<div style="position:relative;">' +
+          renderLabelChip(p) +
+          pickerHtml +
         '</div>' +
       '</div>' +
+      '<input type="text" class="proj-goal" placeholder="Goal — what does success look like?" value="' + escapeAttr(p.goal) + '">' +
+      '<div class="section-head">Actionables ' +
+        '<span class="count">' + p.actionables.filter(a => !a.done).length + ' open</span>' +
+      '</div>' +
+      '<ul class="items actionables-list">' +
+        (p.actionables.length === 0
+          ? '<li style="border:none; padding:0;"><div class="empty-line">No actionables — add one below</div></li>'
+          : p.actionables.map(a => renderActionable(p, a)).join("")
+        ) +
+      '</ul>' +
+      '<button class="btn add-line" data-action="add-actionable">+ Add actionable</button>' +
     '</article>'
   );
 }
@@ -535,28 +709,13 @@ function renderProject(p) {
 function renderActionable(p, a) {
   const isToday = hasLabel(a, "today");
   const isStuck = hasLabel(a, "stuck");
-  let linkedRow = "";
-  if (isStuck) {
-    if (p.blockers.length === 0) {
-      linkedRow =
-        '<div class="linked-row">' +
-          '<span class="lbl">Linked:</span>' +
-          '<span class="no-blockers">no blockers in this project — add one →</span>' +
-        '</div>';
-    } else {
-      linkedRow =
-        '<div class="linked-row">' +
-          '<span class="lbl">Linked:</span>' +
-          p.blockers.map(b => {
-            const linked = (a.blockedBy || []).includes(b.id);
-            return '<button class="blocker-chip ' + (linked ? "linked" : "") + '" ' +
-                   'data-action="toggle-link" data-blocker-id="' + b.id + '" title="' + escapeAttr(b.text || "(empty blocker)") + '">' +
-                   escapeAttr(b.text ? (b.text.length > 30 ? b.text.slice(0,28) + "…" : b.text) : "(empty)") +
-                   '</button>';
-          }).join("") +
-        '</div>';
-    }
-  }
+  const isWaiting = hasLabel(a, "waiting");
+  const blockerRow =
+    '<div class="blocker-row ' + (isStuck ? "" : "hidden") + '">' +
+      '<span class="lbl">Blocker:</span>' +
+      '<input type="text" data-action="update-blocker" ' +
+        'placeholder="What\'s in the way?" value="' + escapeAttr(a.blocker || "") + '">' +
+    '</div>';
   return (
     '<li data-item-id="' + a.id + '" class="' + (a.done ? "done" : "") + '">' +
       '<div class="item-row">' +
@@ -564,27 +723,11 @@ function renderActionable(p, a) {
         '<input type="text" class="item-text" data-action="update-actionable" ' +
           'placeholder="What needs to be done?" value="' + escapeAttr(a.text) + '">' +
         '<button class="label-btn today ' + (isToday ? "active" : "") + '" data-action="toggle-today">Today</button>' +
-        '<button class="label-btn stuck ' + (isStuck ? "active" : "") + '" data-action="toggle-stuck">Stuck' +
-          (isStuck && a.blockedBy && a.blockedBy.length ? " · " + a.blockedBy.length : "") +
-        '</button>' +
+        '<button class="label-btn stuck ' + (isStuck ? "active" : "") + '" data-action="toggle-stuck">Stuck</button>' +
+        '<button class="label-btn waiting ' + (isWaiting ? "active" : "") + '" data-action="toggle-waiting">Waiting</button>' +
         '<button class="li-rm" data-action="remove-actionable" title="Remove">×</button>' +
       '</div>' +
-      linkedRow +
-    '</li>'
-  );
-}
-
-function renderBlocker(projId, b) {
-  const days = ageDays(b.addedAt);
-  const ageClass = days >= 7 ? "bad" : days >= 3 ? "warn" : "";
-  return (
-    '<li data-item-id="' + b.id + '">' +
-      '<div class="item-row">' +
-        '<input type="text" class="item-text" data-action="update-blocker" ' +
-          'placeholder="What\'s in the way?" value="' + escapeAttr(b.text) + '">' +
-        '<span class="age ' + ageClass + '">' + ageLabel(days) + '</span>' +
-        '<button class="li-rm" data-action="remove-blocker" title="Unblocked">×</button>' +
-      '</div>' +
+      blockerRow +
     '</li>'
   );
 }
@@ -593,23 +736,32 @@ function renderBlocker(projId, b) {
 function wireProjects() {
   const container = document.getElementById("projects-container");
 
-  container.querySelectorAll('button[data-action]').forEach(el => {
-    el.addEventListener("click", () => {
+  container.querySelectorAll('[data-action]').forEach(el => {
+    if (el.tagName === "INPUT") return; // inputs handled separately
+    el.addEventListener("click", (e) => {
+      e.stopPropagation();
       const action = el.dataset.action;
       const proj = el.closest('[data-project-id]');
       const projId = proj && proj.dataset.projectId;
       const item = el.closest('[data-item-id]');
       const itemId = item && item.dataset.itemId;
-      const blockerId = el.dataset.blockerId;
 
-      if (action === "delete-project")      deleteProject(projId);
-      else if (action === "add-actionable") addActionable(projId);
-      else if (action === "remove-actionable") removeActionable(projId, itemId);
-      else if (action === "add-blocker")    addBlocker(projId);
-      else if (action === "remove-blocker") removeBlocker(projId, itemId);
-      else if (action === "toggle-today")   toggleActionableLabel(projId, itemId, "today");
-      else if (action === "toggle-stuck")   toggleActionableLabel(projId, itemId, "stuck");
-      else if (action === "toggle-link")    toggleBlockerLink(projId, itemId, blockerId);
+      if (action === "delete-project")          deleteProject(projId);
+      else if (action === "add-actionable")     addActionable(projId);
+      else if (action === "remove-actionable")  removeActionable(projId, itemId);
+      else if (action === "toggle-today")       toggleActionableLabel(projId, itemId, "today");
+      else if (action === "toggle-stuck")       toggleActionableLabel(projId, itemId, "stuck");
+      else if (action === "toggle-waiting")     toggleActionableLabel(projId, itemId, "waiting");
+      else if (action === "open-label-picker") {
+        activePicker = activePicker === projId ? null : projId;
+        renderProjects();
+      }
+      else if (action === "set-label") {
+        const labelId = el.dataset.labelId || null;
+        setProjectLabel(projId, labelId);
+        activePicker = null;
+        renderProjects();
+      }
     });
   });
 
@@ -636,27 +788,88 @@ function wireProjects() {
       const proj = inp.closest('[data-project-id]');
       const item = inp.closest('[data-item-id]');
       if (!proj || !item) return;
-      const action = inp.dataset.action;
-      if (action === "update-actionable") updateActionable(proj.dataset.projectId, item.dataset.itemId, "text", inp.value);
-      else if (action === "update-blocker") updateBlocker(proj.dataset.projectId, item.dataset.itemId, inp.value);
+      updateActionable(proj.dataset.projectId, item.dataset.itemId, "text", inp.value);
     });
     inp.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
         const proj = inp.closest('[data-project-id]');
-        if (!proj) return;
-        const action = inp.dataset.action;
-        if (action === "update-actionable") addActionable(proj.dataset.projectId);
-        else if (action === "update-blocker") addBlocker(proj.dataset.projectId);
+        if (proj) addActionable(proj.dataset.projectId);
       }
     });
   });
+
+  container.querySelectorAll('input[data-action="update-blocker"]').forEach(inp => {
+    inp.addEventListener("input", () => {
+      const proj = inp.closest('[data-project-id]');
+      const item = inp.closest('[data-item-id]');
+      if (!proj || !item) return;
+      updateActionable(proj.dataset.projectId, item.dataset.itemId, "blocker", inp.value);
+    });
+  });
+}
+
+// Close label picker on outside click
+document.addEventListener("click", (e) => {
+  if (activePicker && !e.target.closest('.label-picker') && !e.target.closest('[data-action="open-label-picker"]')) {
+    activePicker = null;
+    renderProjects();
+  }
+});
+
+// ─── Drag and drop reorder ─────────────────────────────
+function attachDragHandlers() {
+  const articles = document.querySelectorAll('.project');
+  articles.forEach(article => {
+    const handle = article.querySelector('[data-drag-handle]');
+    if (!handle) return;
+
+    handle.addEventListener("mousedown", () => { article.draggable = true; });
+    handle.addEventListener("mouseup", () => { article.draggable = false; });
+
+    article.addEventListener("dragstart", (e) => {
+      article.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", article.dataset.projectId);
+    });
+    article.addEventListener("dragend", () => {
+      article.classList.remove("dragging");
+      article.draggable = false;
+      document.querySelectorAll('.project.drag-over').forEach(el => el.classList.remove("drag-over"));
+    });
+    article.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      if (!article.classList.contains("dragging")) article.classList.add("drag-over");
+    });
+    article.addEventListener("dragleave", () => {
+      article.classList.remove("drag-over");
+    });
+    article.addEventListener("drop", (e) => {
+      e.preventDefault();
+      article.classList.remove("drag-over");
+      const draggedId = e.dataTransfer.getData("text/plain");
+      const targetId = article.dataset.projectId;
+      if (!draggedId || draggedId === targetId) return;
+      reorderProjects(draggedId, targetId);
+    });
+  });
+}
+
+function reorderProjects(draggedId, targetId) {
+  const draggedIdx = state.projects.findIndex(p => p.id === draggedId);
+  if (draggedIdx === -1) return;
+  const dragged = state.projects[draggedIdx];
+  state.projects.splice(draggedIdx, 1);
+  const newTargetIdx = state.projects.findIndex(p => p.id === targetId);
+  if (newTargetIdx === -1) { state.projects.splice(draggedIdx, 0, dragged); return; }
+  state.projects.splice(newTargetIdx, 0, dragged);
+  saveState(); renderProjects();
 }
 
 // ─── Render: Today view ────────────────────────────────
 function renderToday() {
   const container = document.getElementById("today-list-container");
-  // Collect all today-labeled actionables, grouped by project
   const groups = [];
   state.projects.forEach(p => {
     const items = p.actionables.filter(a => hasLabel(a, "today"));
@@ -672,17 +885,22 @@ function renderToday() {
     return;
   }
 
-  // Sort within each: open first, then done
   groups.forEach(g => {
     g.items.sort((x, y) => (x.done === y.done ? 0 : x.done ? 1 : -1));
   });
 
   container.innerHTML = groups.map(g => {
     const openCount = g.items.filter(i => !i.done).length;
+    const l = findLabel(g.project.labelId);
+    const labelChip = l ?
+      ' <span class="label-chip" style="background:' + l.color + '22; color:' + l.color + '; border-color:' + l.color + '55;">' +
+        '<span class="dot" style="background:' + l.color + ';"></span>' + escapeAttr(l.name || "") +
+      '</span>'
+      : "";
     return (
       '<div class="today-group">' +
-        '<h3>' + escapeAttr(g.project.name || "(untitled project)") +
-          ' <span style="color:var(--text-4); font-weight:400; text-transform:none; letter-spacing:0; margin-left:6px;">' +
+        '<h3>' + escapeAttr(g.project.name || "(untitled project)") + labelChip +
+          '<span style="color:var(--text-4); font-weight:400; text-transform:none; letter-spacing:0; margin-left:auto;">' +
             openCount + ' / ' + g.items.length +
           '</span>' +
         '</h3>' +
@@ -698,16 +916,15 @@ function renderToday() {
 
 function renderTodayItem(p, a) {
   const isStuck = hasLabel(a, "stuck");
-  const blockedByCount = (a.blockedBy || []).length;
-  let stuckBadge = "";
-  if (isStuck) {
-    stuckBadge = '<div class="stuck-indicator">Stuck' + (blockedByCount ? " · " + blockedByCount : "") + '</div>';
-  }
+  const isWaiting = hasLabel(a, "waiting");
+  let badges = "";
+  if (isStuck) badges += '<div class="stuck-indicator">Stuck</div>';
+  if (isWaiting) badges += '<div class="waiting-indicator">Waiting</div>';
   return (
     '<div class="today-item' + (a.done ? " done" : "") + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
       '<input type="checkbox" data-action="today-toggle"' + (a.done ? " checked" : "") + '>' +
       '<div class="text">' + escapeAttr(a.text || "(untitled)") + '</div>' +
-      stuckBadge +
+      badges +
       '<div class="proj-tag" data-action="jump-to-project">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
     '</div>'
   );
@@ -726,7 +943,6 @@ function wireTodayView() {
   container.querySelectorAll('[data-action="jump-to-project"]').forEach(tag => {
     tag.addEventListener("click", () => {
       setView("projects");
-      // Scroll the project into view
       setTimeout(() => {
         const wrap = tag.closest('.today-item');
         const el = document.querySelector('[data-project-id="' + wrap.dataset.projectId + '"]');
@@ -736,7 +952,6 @@ function wireTodayView() {
   });
 }
 
-// ─── Render all ────────────────────────────────────────
 function renderAll() {
   renderCounts();
   if (currentView === "today") renderToday();
@@ -762,17 +977,20 @@ function importDataFromFile(file) {
     try {
       const parsed = JSON.parse(e.target.result);
       if (!parsed.projects || !Array.isArray(parsed.projects)) throw new Error("Missing 'projects' array");
-      if (!confirm("This will replace your current projects with the imported file. Continue?")) return;
+      if (!confirm("This will replace your current data with the imported file. Continue?")) return;
       state = parsed;
+      state.labels = state.labels || [];
       state.projects.forEach(p => {
+        if (p.labelId === undefined) p.labelId = null;
         (p.actionables || []).forEach(a => {
           if (!Array.isArray(a.labels)) a.labels = [];
-          if (!Array.isArray(a.blockedBy)) a.blockedBy = [];
+          if (typeof a.blocker !== "string") a.blocker = "";
         });
       });
       saveState();
       renderAll();
-      alert("✓ Imported " + state.projects.length + " projects");
+      renderLabelsPanel();
+      alert("✓ Imported " + state.projects.length + " projects, " + state.labels.length + " labels");
     } catch (err) {
       alert("Couldn't read that file: " + err.message);
     }
@@ -786,11 +1004,20 @@ document.getElementById("import-file").addEventListener("change", (e) => {
   e.target.value = "";
 });
 
+// ─── Labels panel toggle ───────────────────────────────
+document.getElementById("labels-btn").addEventListener("click", () => {
+  const panel = document.getElementById("labels-panel");
+  panel.classList.toggle("hidden");
+  if (!panel.classList.contains("hidden")) renderLabelsPanel();
+});
+document.getElementById("add-label-btn").addEventListener("click", addLabel);
+
 // ─── Init ──────────────────────────────────────────────
 document.getElementById("new-project").addEventListener("click", () => {
   setView("projects");
   addProject();
 });
+renderLabelsPanel();
 setView(currentView);
 </script>
 
