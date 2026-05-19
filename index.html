@@ -1399,7 +1399,7 @@ body.journal-mode .filter-bar { display: none !important; }
 .drag-handle:active { cursor: grabbing; }
 
 .project .delete-btn {
-  position: absolute; top: 12px; right: 12px;
+  position: absolute; top: -4px; right: 0;
   background: none; border: none; color: var(--text-4);
   cursor: pointer; padding: 4px 9px; font-size: 12px;
   border-radius: 5px; font-family: inherit;
@@ -1408,8 +1408,8 @@ body.journal-mode .filter-bar { display: none !important; }
 .project:hover .delete-btn { opacity: 1; }
 .project .delete-btn:hover { color: var(--bad); background: rgba(239, 68, 68, 0.1); }
 
-/* Left column: project name + meta */
-.proj-header { min-width: 0; padding-right: 50px; }
+/* Left column: project name + meta (delete sits inside this column now) */
+.proj-header { min-width: 0; padding-right: 50px; position: relative; }
 .proj-name {
   width: 100%; min-width: 0; background: transparent; border: none;
   font-family: var(--font-serif);
@@ -1674,8 +1674,12 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
   background: var(--card); border: 1px solid var(--border-strong);
   border-radius: 8px; padding: 4px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  z-index: 50; min-width: 160px; margin-top: 4px;
+  z-index: 200; min-width: 160px; margin-top: 4px;
 }
+/* Raise the parent project's stacking context when a picker is open
+   so the dropdown can extend over the next project card below it. */
+.project:has(.status-picker) { z-index: 100; }
+.actionables-list > li:has(.status-picker) { z-index: 100; position: relative; }
 .status-picker .picker-option {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 8px; border-radius: 5px;
@@ -3930,8 +3934,8 @@ function renderProject(p) {
   return (
     '<article class="project" data-project-id="' + p.id + '" ' + colorAttrs + '>' +
       '<div class="drag-handle" data-drag-handle>⋮⋮</div>' +
-      '<button class="delete-btn" data-action="delete-project">Delete</button>' +
       '<div class="proj-header">' +
+        '<button class="delete-btn" data-action="delete-project">Delete</button>' +
         '<div class="proj-name" contenteditable="true" data-placeholder="Project name" spellcheck="false">' +
           escapeAttr(p.name) +
         '</div>' +
