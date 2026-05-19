@@ -549,18 +549,31 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 .wind-down-popover .wd-trigger:hover { color: var(--accent); border-color: var(--accent); }
 
-/* Daily progress dashboard — compact, right half of the hero row */
+/* Daily progress dashboard — left half of the hero row.
+   Layout: big date pinned to the left, progress + stats stacked on the right. */
 .daily-dashboard {
   background: linear-gradient(135deg, #2e2925 0%, #1c1c1e 100%);
   border: 1px solid rgba(255, 107, 71, 0.28);
   border-radius: 12px;
-  padding: 14px 18px;
-  display: flex; flex-direction: column; justify-content: center;
-  gap: 10px;
+  padding: 14px 20px;
+  display: flex; flex-direction: row; align-items: center;
+  gap: 22px;
+}
+.dd-date {
+  font-family: var(--font-sans);
+  font-size: 26px; font-weight: 800;
+  color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.04em;
+  white-space: nowrap;
+  line-height: 1.05;
+  flex-shrink: 0;
+}
+.dd-right-col {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 10px;
 }
 .dd-progress-row {
   display: flex; align-items: center; gap: 12px;
-  margin-bottom: 8px;
 }
 .dd-progress-bar {
   flex: 1; height: 8px; background: rgba(255,255,255,0.05);
@@ -574,28 +587,15 @@ body.journal-mode .filter-bar { display: none !important; }
   font-size: 12px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.dd-bottom {
-  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
-}
-.dd-date {
-  font-size: 12px; font-weight: 600; color: var(--accent);
-  text-transform: uppercase; letter-spacing: 0.08em;
-  white-space: nowrap;
-}
-.dd-bottom-sep { color: var(--text-4); font-size: 11px; }
-.dd-quick {
-  font-size: 11px; color: var(--text-3);
-  display: flex; gap: 14px; flex-wrap: wrap;
-}
-.dd-quick span strong { color: var(--text-2); font-weight: 600; }
-.dd-quick .pill-stuck { color: var(--bad); }
-.dd-quick .pill-waiting { color: var(--waiting); }
-.dd-quick .pill-backburner { color: var(--text-3); }
 .dd-stats {
-  font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums;
-  margin-left: auto;
+  font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 .dd-stats strong { color: var(--text); font-weight: 600; }
+@media (max-width: 720px) {
+  .daily-dashboard { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .dd-stats { text-align: left; }
+}
 
 /* Tabs */
 .tabs {
@@ -687,6 +687,9 @@ body.journal-mode .filter-bar { display: none !important; }
   display: flex; align-items: center; gap: 18px;
   margin-left: auto;
   flex-wrap: wrap;
+}
+.filter-bar-deep {
+  display: flex; align-items: center; gap: 12px;
 }
 .filter-bar-stats .stat {
   display: inline-flex; align-items: baseline; gap: 6px;
@@ -1495,17 +1498,17 @@ ul.items li:hover .row-tool { opacity: 1; }
 </header>
 
 <div class="hero-row">
-  <div id="wind-down-wrap"></div>
   <div class="daily-dashboard" id="daily-dashboard">
-    <div class="dd-progress-row">
-      <div class="dd-progress-bar"><div id="dd-progress-fill" style="width:0%"></div></div>
-      <div class="dd-progress-label" id="dd-progress-label">—</div>
-    </div>
-    <div class="dd-bottom">
-      <div class="dd-date" id="dd-date-text"></div>
+    <div class="dd-date" id="dd-date-text"></div>
+    <div class="dd-right-col">
+      <div class="dd-progress-row">
+        <div class="dd-progress-bar"><div id="dd-progress-fill" style="width:0%"></div></div>
+        <div class="dd-progress-label" id="dd-progress-label">—</div>
+      </div>
       <div class="dd-stats" id="dd-stats"></div>
     </div>
   </div>
+  <div id="wind-down-wrap"></div>
 </div>
 
 <div class="filter-bar" id="filter-bar"></div>
@@ -2728,31 +2731,32 @@ function renderFilterBar() {
     { value: 3,    label: "High",   color: "#dc2626" }
   ];
   let leftHtml = "";
-  // Deep-work button leads the row — toggles between Start and End.
-  // Today's completed sessions render as a row of 3 circles right after it.
-  const dwActive = !!(state.deepWork && state.deepWork.active);
-  const today = todayDateString();
-  const completedToday = (state.deepWork.completedDate === today)
-    ? (state.deepWork.completedToday || 0) : 0;
-  leftHtml += '<button class="btn accent' + (dwActive ? " ending" : "") + '" id="deep-toggle-btn" ' +
-    'title="' + (dwActive ? "End the focus session" : "Start a 75-minute focus session") + '">' +
-    (dwActive ? "End deep work" : "Start deep work") +
-  '</button>';
-  let circles = '<div class="deep-circles" title="' + completedToday + ' of 3 sessions today">';
-  for (let i = 0; i < 3; i++) {
-    circles += '<span class="dc' + (i < completedToday ? " filled" : "") + '"></span>';
-  }
-  circles += '</div>';
-  leftHtml += circles;
   leftHtml += buildDropdownHtml("status",   "Status",   fs.status,   statusOpts);
   leftHtml += buildDropdownHtml("priority", "Priority", fs.priority, priorityOpts);
   if (isStatusFilterActive() || isPriorityFilterActive()) {
     leftHtml += '<button class="filter-clear" id="filter-clear-btn">Clear filters</button>';
   }
-  // Stats live on the right edge of the same row, scoped to the active tab
+
+  // Deep-work cluster lives on the far right, past the stats strip.
+  const dwActive = !!(state.deepWork && state.deepWork.active);
+  const today = todayDateString();
+  const completedToday = (state.deepWork.completedDate === today)
+    ? (state.deepWork.completedToday || 0) : 0;
+  let circles = '<div class="deep-circles" title="' + completedToday + ' of 3 sessions today">';
+  for (let i = 0; i < 3; i++) {
+    circles += '<span class="dc' + (i < completedToday ? " filled" : "") + '"></span>';
+  }
+  circles += '</div>';
+  const deepBtn = '<button class="btn accent' + (dwActive ? " ending" : "") + '" id="deep-toggle-btn" ' +
+    'title="' + (dwActive ? "End the focus session" : "Start a 75-minute focus session") + '">' +
+    (dwActive ? "End deep work" : "Start deep work") +
+  '</button>';
+  const deepCluster = '<div class="filter-bar-deep">' + circles + deepBtn + '</div>';
+
   bar.innerHTML =
     '<div class="filter-bar-left">' + leftHtml + '</div>' +
-    renderStatsStrip();
+    renderStatsStrip() +
+    deepCluster;
 
   const tgl = document.getElementById("deep-toggle-btn");
   if (tgl) {
