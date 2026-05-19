@@ -823,7 +823,7 @@ body.journal-mode .filter-bar { display: none !important; }
   position: relative;
   transition: opacity 0.15s;
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: minmax(0, 30%) 1fr;
   gap: 28px;
   align-items: start;
 }
@@ -874,9 +874,19 @@ body.journal-mode .filter-bar { display: none !important; }
   font-variation-settings: "opsz" 36;
   color: var(--text); padding: 2px 0;
   line-height: 1.2;
+  /* contenteditable variant — wrap on whitespace, break long words too */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  outline: none;
+  cursor: text;
 }
 .proj-name:focus { outline: none; }
-.proj-name::placeholder { color: var(--text-4); font-weight: 500; }
+.proj-name:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-4); font-weight: 500;
+  pointer-events: none;
+}
 
 .proj-meta {
   font-size: 11px; font-weight: 600;
@@ -2837,7 +2847,9 @@ function renderProject(p) {
       '<div class="drag-handle" data-drag-handle>⋮⋮</div>' +
       '<button class="delete-btn" data-action="delete-project">Delete</button>' +
       '<div class="proj-header">' +
-        '<input type="text" class="proj-name" placeholder="Project name" value="' + escapeAttr(p.name) + '">' +
+        '<div class="proj-name" contenteditable="true" data-placeholder="Project name" spellcheck="false">' +
+          escapeAttr(p.name) +
+        '</div>' +
         '<div class="proj-meta">Actionables<span class="count">' + active.length + ' open</span></div>' +
       '</div>' +
       '<div class="proj-body">' +
@@ -3052,11 +3064,21 @@ function wireProjects() {
     });
   });
 
-  container.querySelectorAll('input.proj-name').forEach(inp => {
-    inp.addEventListener("input", () => {
-      const proj = inp.closest('[data-project-id]');
-      updateProjectField(proj.dataset.projectId, "name", inp.value);
+  container.querySelectorAll('.proj-name[contenteditable]').forEach(el => {
+    el.addEventListener("input", () => {
+      const proj = el.closest('[data-project-id]');
+      updateProjectField(proj.dataset.projectId, "name", el.textContent);
       if (searchTerm) applySearchFilter();
+    });
+    // Enter blurs instead of inserting newlines (project names are single-line semantically)
+    el.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); el.blur(); }
+    });
+    // Plain-text only on paste — strip rich formatting
+    el.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData("text");
+      document.execCommand("insertText", false, text);
     });
   });
 
