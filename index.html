@@ -37,22 +37,27 @@
   --font-serif: 'Fraunces', Georgia, "Times New Roman", serif;
 }
 
-/* Warm mode — taupe mid-tone base with beige accents */
-body.warm-mode {
-  --bg: #4A443D;
-  --bg-deep: #3c3730;
-  --card: #56504a;
-  --card-hover: #635c54;
-  --border: #6d6459;
-  --border-strong: #857a6c;
-  --leather: #c4b496;            /* beige */
-  --text: #ece2ce;
-  --text-2: #c0b39a;
-  --text-3: #948876;
-  --text-4: #6b6256;
+/* Light mode — warm cream paper, dark text, same orange accent */
+body.light-mode {
+  --bg: #F5EFE4;        /* warm cream page */
+  --bg-deep: #ECE3CC;   /* sidebar — slightly darker cream */
+  --card: #FFFCF6;
+  --card-hover: #F0E9DB;
+  --border: #DDD4C2;
+  --border-strong: #C9BFAA;
+  --leather: #8C8275;
+  --text: #1F1B14;
+  --text-2: #5A554A;
+  --text-3: #8B8478;
+  --text-4: #B0A99A;
 }
-body.warm-mode .daily-dashboard {
-  background: linear-gradient(135deg, #5a5044 0%, var(--bg) 100%);
+body.light-mode .daily-dashboard {
+  background: linear-gradient(135deg, #FFE3CC 0%, var(--bg) 100%);
+}
+body.light-mode::before {
+  /* Multiply blend so the noise gently darkens the paper, not lightens it */
+  mix-blend-mode: multiply;
+  opacity: 0.04;
 }
 /* Settings modal: section + theme toggle pills */
 .settings-section { margin-bottom: 18px; }
@@ -1926,14 +1931,19 @@ if (state.deepWork.active && state.deepWork.startedAt) {
 // Morning Journal — date-keyed map of { q1, q2, q3, q4 }
 state.journal = state.journal || {};
 
-// Layout prefs (device-local) — split % + warm-mode theme
-state.layout = state.layout || { projectSplit: 30, warmMode: false };
+// Layout prefs (device-local) — split % + light-mode theme
+state.layout = state.layout || { projectSplit: 30, lightMode: false };
+// Migrate the old warmMode flag if it's still hanging around
+if (state.layout.warmMode === true && typeof state.layout.lightMode !== "boolean") {
+  state.layout.lightMode = false; // don't auto-apply old warm preference to new light mode
+}
+delete state.layout.warmMode;
 if (typeof state.layout.projectSplit !== "number") state.layout.projectSplit = 30;
-if (typeof state.layout.warmMode !== "boolean") state.layout.warmMode = false;
+if (typeof state.layout.lightMode !== "boolean") state.layout.lightMode = false;
 state.layout.projectSplit = Math.max(15, Math.min(70, state.layout.projectSplit));
 // Apply it now so first paint reflects the saved width + theme
 document.documentElement.style.setProperty('--proj-split', state.layout.projectSplit + '%');
-if (state.layout.warmMode) document.body.classList.add('warm-mode');
+if (state.layout.lightMode) document.body.classList.add('light-mode');
 // Migrate older flat-shape filters (status/priority/statuses/labelIds at top level)
 // to the new per-view map. The old global filter is discarded — each view now
 // keeps its own filter selection, with "home" lazily defaulting to status="today".
@@ -3014,7 +3024,7 @@ function renderWindDownModal() {
   if (!wrap) return;
   if (!activeWindDownEditor) { wrap.innerHTML = ""; return; }
   const inEarned = windDownPhase() === "earned";
-  const warm = !!(state.layout && state.layout.warmMode);
+  const lightOn = !!(state.layout && state.layout.lightMode);
   const undoHtml = inEarned
     ? '<button class="wd-undo-btn" id="wd-undo-btn" title="Undo today\'s wind-down — resume the day">Undo today\'s wind-down</button>'
     : '';
@@ -3027,8 +3037,8 @@ function renderWindDownModal() {
         '<div class="settings-section">' +
           '<div class="wd-title">Appearance</div>' +
           '<div class="theme-toggle">' +
-            '<button class="theme-opt' + (warm ? "" : " active") + '" data-theme="cool">Cool</button>' +
-            '<button class="theme-opt' + (warm ? " active" : "") + '" data-theme="warm">Warm</button>' +
+            '<button class="theme-opt' + (lightOn ? "" : " active") + '" data-theme="cool">Cool</button>' +
+            '<button class="theme-opt' + (lightOn ? " active" : "") + '" data-theme="light">Light</button>' +
           '</div>' +
         '</div>' +
 
@@ -3073,10 +3083,10 @@ function wireWindDown() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const target = btn.dataset.theme;
-      const want = target === "warm";
+      const want = target === "light";
       state.layout = state.layout || {};
-      state.layout.warmMode = want;
-      document.body.classList.toggle("warm-mode", want);
+      state.layout.lightMode = want;
+      document.body.classList.toggle("light-mode", want);
       saveState();
       renderWindDownModal(); // re-render so the active pill updates
     });
