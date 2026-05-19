@@ -321,6 +321,71 @@ input.search:focus + kbd { display: none; }
   border-color: var(--text-3);
 }
 
+/* Deep-work toggle + session circles inside the filter bar */
+.btn.accent.ending {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+.btn.accent.ending:hover { background: rgba(255,107,71,0.10); }
+
+.deep-circles {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 2px;
+}
+.deep-circles .dc {
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 1.5px solid var(--text-4);
+  background: transparent;
+  transition: background 0.2s, border-color 0.2s;
+}
+.deep-circles .dc.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Morning Journal view */
+#journal-view { max-width: 760px; margin: 0 auto; }
+.journal-header {
+  margin-bottom: 28px;
+}
+.journal-header h1 {
+  font-family: var(--font-serif); font-weight: 500;
+  font-size: 38px; letter-spacing: -0.02em; line-height: 1.1;
+  color: var(--text);
+  font-variation-settings: "opsz" 72;
+}
+.journal-header .subtitle {
+  margin-top: 6px; color: var(--text-3); font-size: 14px;
+}
+.journal-question {
+  margin-bottom: 26px;
+}
+.journal-question .label {
+  font-family: var(--font-serif); font-weight: 500;
+  font-size: 20px; line-height: 1.35; letter-spacing: -0.01em;
+  color: var(--text);
+  margin-bottom: 10px;
+  font-variation-settings: "opsz" 36;
+}
+.journal-question textarea {
+  width: 100%;
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text); font-family: inherit;
+  font-size: 14px; line-height: 1.55;
+  padding: 12px 14px; border-radius: 8px;
+  resize: vertical; min-height: 90px;
+}
+.journal-question textarea:focus {
+  outline: none; border-color: var(--accent);
+}
+.journal-question textarea::placeholder { color: var(--text-4); font-style: italic; }
+.journal-meta {
+  font-size: 11px; color: var(--text-4);
+  text-align: right;
+  margin-top: -16px; margin-bottom: 18px;
+}
+
 .wind-down-popover {
   position: absolute; top: calc(100% + 6px); right: 0;
   background: var(--card); border: 1px solid var(--border-strong);
@@ -1277,6 +1342,10 @@ ul.items li:hover .row-tool { opacity: 1; }
 
 <div class="filter-bar" id="filter-bar"></div>
 
+<div id="journal-view" style="display:none;">
+  <div id="journal-container"></div>
+</div>
+
 <div id="home-view" style="display:none;">
   <div id="home-list-container"></div>
 </div>
@@ -1335,6 +1404,8 @@ if (typeof state.windDown.minute !== "number") state.windDown.minute = 0;
 
 // Deep Work session — transient timer that overrides the wind-down card
 state.deepWork = state.deepWork || { active: false, startedAt: null, durationMs: 75 * 60 * 1000 };
+if (typeof state.deepWork.completedToday !== "number") state.deepWork.completedToday = 0;
+if (state.deepWork.completedDate === undefined)        state.deepWork.completedDate = null;
 if (state.deepWork.active && state.deepWork.startedAt) {
   // Reloading mid-session — if the timer has already elapsed, end the session
   // (we can't play the chime without a fresh user gesture, but state is clean).
@@ -1343,6 +1414,9 @@ if (state.deepWork.active && state.deepWork.startedAt) {
     state.deepWork.startedAt = null;
   }
 }
+
+// Morning Journal — date-keyed map of { q1, q2, q3, q4 }
+state.journal = state.journal || {};
 // Migrate older flat-shape filters (status/priority/statuses/labelIds at top level)
 // to the new per-view map. The old global filter is discarded — each view now
 // keeps its own filter selection, with "home" lazily defaulting to status="today".
@@ -1805,7 +1879,7 @@ function deleteLabel(id) {
 
 // ─── View switching ────────────────────────────────────
 function validViews() {
-  const set = new Set(["home"]);
+  const set = new Set(["journal", "home"]);
   if (state.labels.length === 0) set.add("all");
   state.labels.forEach(l => set.add(l.id));
   if (state.projects.some(p => !p.labelId)) set.add("uncategorized");
@@ -1818,8 +1892,9 @@ function setView(view) {
   currentView = view;
   window.localStorage.setItem("view", view);
   markPrefsDirty();
-  document.getElementById('home-view').style.display = view === 'home' ? 'block' : 'none';
-  document.getElementById('projects-view').style.display = view !== 'home' ? 'block' : 'none';
+  document.getElementById('journal-view').style.display  = view === 'journal' ? 'block' : 'none';
+  document.getElementById('home-view').style.display     = view === 'home'    ? 'block' : 'none';
+  document.getElementById('projects-view').style.display = (view !== 'home' && view !== 'journal') ? 'block' : 'none';
   renderAll();
 }
 
@@ -1855,6 +1930,13 @@ function renderTabs() {
   }));
 
   let html = '';
+  // Morning Journal — daily reflection (sits above Home)
+  html += '<div class="sidebar-tab-wrap">' +
+    '<button class="sidebar-tab' + (currentView === "journal" ? " active" : "") + '" data-view="journal">' +
+      '<span class="dot" style="background:transparent;"></span>' +
+      '<span class="name">Morning Journal</span>' +
+    '</button>' +
+  '</div>';
   // Home (no color dot — it's the universal view)
   html += '<div class="sidebar-tab-wrap">' +
     '<button class="sidebar-tab' + (currentView === "home" ? " active" : "") + '" data-view="home">' +
@@ -2126,7 +2208,19 @@ function startDeepWork() {
 }
 function endDeepWork(opts) {
   const playChime = opts && opts.playChime;
-  state.deepWork = { active: false, startedAt: null, durationMs: 75 * 60 * 1000 };
+  // Carry the daily counter across the reset (and reset it at date rollover)
+  const today = todayDateString();
+  let completedToday = (state.deepWork.completedDate === today)
+    ? (state.deepWork.completedToday || 0) : 0;
+  // Only a natural completion (chime) counts as a finished session
+  if (playChime) completedToday = Math.min(3, completedToday + 1);
+  state.deepWork = {
+    active: false,
+    startedAt: null,
+    durationMs: 75 * 60 * 1000,
+    completedToday,
+    completedDate: today
+  };
   saveState();
   if (playChime) playPeacefulChime();
   renderWindDown();
@@ -2176,7 +2270,6 @@ function renderWindDown() {
     }
     wrap.innerHTML =
       '<div class="wind-down deep" id="wind-down-btn">' +
-        '<button class="deep-corner-btn end" id="deep-end-btn" title="End focus session">End</button>' +
         '<div class="wd-left">' +
           '<div class="wd-label">Deep Work</div>' +
           '<div class="wd-target">75-minute focus · gentle chime when done</div>' +
@@ -2455,12 +2548,22 @@ function renderFilterBar() {
     { value: 3,    label: "High",   color: "#dc2626" }
   ];
   let leftHtml = "";
-  // Start-deep-work button leads the row, styled like "+ New project".
-  // Hidden while a focus session is already running.
-  if (!(state.deepWork && state.deepWork.active)) {
-    leftHtml += '<button class="btn accent" id="start-deep-work-btn" ' +
-      'title="Start a 75-minute focus session">Start deep work</button>';
+  // Deep-work button leads the row — toggles between Start and End.
+  // Today's completed sessions render as a row of 3 circles right after it.
+  const dwActive = !!(state.deepWork && state.deepWork.active);
+  const today = todayDateString();
+  const completedToday = (state.deepWork.completedDate === today)
+    ? (state.deepWork.completedToday || 0) : 0;
+  leftHtml += '<button class="btn accent' + (dwActive ? " ending" : "") + '" id="deep-toggle-btn" ' +
+    'title="' + (dwActive ? "End the focus session" : "Start a 75-minute focus session") + '">' +
+    (dwActive ? "End deep work" : "Start deep work") +
+  '</button>';
+  let circles = '<div class="deep-circles" title="' + completedToday + ' of 3 sessions today">';
+  for (let i = 0; i < 3; i++) {
+    circles += '<span class="dc' + (i < completedToday ? " filled" : "") + '"></span>';
   }
+  circles += '</div>';
+  leftHtml += circles;
   leftHtml += buildDropdownHtml("status",   "Status",   fs.status,   statusOpts);
   leftHtml += buildDropdownHtml("priority", "Priority", fs.priority, priorityOpts);
   if (isStatusFilterActive() || isPriorityFilterActive()) {
@@ -2471,11 +2574,15 @@ function renderFilterBar() {
     '<div class="filter-bar-left">' + leftHtml + '</div>' +
     renderStatsStrip();
 
-  const sdb = document.getElementById("start-deep-work-btn");
-  if (sdb) {
-    sdb.addEventListener("click", (e) => {
+  const tgl = document.getElementById("deep-toggle-btn");
+  if (tgl) {
+    tgl.addEventListener("click", (e) => {
       e.stopPropagation();
-      startDeepWork();
+      if (state.deepWork && state.deepWork.active) {
+        endDeepWork({ playChime: false });
+      } else {
+        startDeepWork();
+      }
     });
   }
 
@@ -3266,6 +3373,57 @@ function wireHomeView() {
   });
 }
 
+// ─── Render: Morning Journal ──────────────────────────
+const JOURNAL_QUESTIONS = [
+  { key: "q1", text: "What are the highest-leverage activities you can do today?" },
+  { key: "q2", text: "What are the things you're doing that you know you shouldn't?" },
+  { key: "q3", text: "What are the things you're not doing that you know you should?" },
+  { key: "q4", text: "What is the one thing you could accomplish today to consider the day a success?" }
+];
+function getJournalEntry(date) {
+  if (!state.journal[date]) state.journal[date] = { q1: "", q2: "", q3: "", q4: "" };
+  return state.journal[date];
+}
+function updateJournal(date, key, value) {
+  const e = getJournalEntry(date);
+  e[key] = value;
+  markJournalDirty(date);
+  saveState();
+}
+function renderJournal() {
+  const container = document.getElementById("journal-container");
+  const date = todayDateString();
+  const entry = getJournalEntry(date);
+  const today = new Date();
+  const dateLabel = today.toLocaleDateString("en-US", {
+    weekday: "long", month: "long", day: "numeric", year: "numeric"
+  });
+  const questions = JOURNAL_QUESTIONS.map(q =>
+    '<div class="journal-question">' +
+      '<div class="label">' + q.text + '</div>' +
+      '<textarea data-journal-key="' + q.key + '" placeholder="Write…">' +
+        escapeAttr(entry[q.key] || "") +
+      '</textarea>' +
+    '</div>'
+  ).join("");
+  container.innerHTML =
+    '<div class="journal-header">' +
+      '<h1>Morning Journal</h1>' +
+      '<div class="subtitle">' + dateLabel + '</div>' +
+    '</div>' +
+    questions;
+  wireJournal();
+}
+function wireJournal() {
+  const container = document.getElementById("journal-container");
+  const date = todayDateString();
+  container.querySelectorAll('textarea[data-journal-key]').forEach(ta => {
+    ta.addEventListener("input", () => {
+      updateJournal(date, ta.dataset.journalKey, ta.value);
+    });
+  });
+}
+
 function renderAll() {
   renderDateHeader();
   renderDailyDashboard();
@@ -3279,10 +3437,12 @@ function renderAll() {
     window.localStorage.setItem("view", currentView);
     renderTabs();
   }
-  document.getElementById('home-view').style.display = currentView === 'home' ? 'block' : 'none';
-  document.getElementById('projects-view').style.display = currentView !== 'home' ? 'block' : 'none';
-  if (currentView === "home") renderHome();
-  else renderProjects();
+  document.getElementById('journal-view').style.display  = currentView === 'journal' ? 'block' : 'none';
+  document.getElementById('home-view').style.display     = currentView === 'home'    ? 'block' : 'none';
+  document.getElementById('projects-view').style.display = (currentView !== 'home' && currentView !== 'journal') ? 'block' : 'none';
+  if (currentView === "journal")   renderJournal();
+  else if (currentView === "home") renderHome();
+  else                              renderProjects();
 }
 
 // ─── Export / Import ──────────────────────────────────
@@ -3423,16 +3583,18 @@ document.getElementById('sign-out-btn').addEventListener('click', async () => {
 // ─── Cloud data layer ──────────────────────────────────
 async function loadStateFromCloud() {
   if (!sb || !currentUser) return;
-  const [tabsRes, projectsRes, actionablesRes, prefsRes] = await Promise.all([
+  const [tabsRes, projectsRes, actionablesRes, prefsRes, journalRes] = await Promise.all([
     sb.from('tabs').select('*').order('position', { ascending: true }),
     sb.from('projects').select('*').order('position', { ascending: true }),
     sb.from('actionables').select('*').order('position', { ascending: true }),
-    sb.from('user_prefs').select('*').eq('user_id', currentUser.id).maybeSingle()
+    sb.from('user_prefs').select('*').eq('user_id', currentUser.id).maybeSingle(),
+    sb.from('journal_entries').select('*').order('entry_date', { ascending: false }).limit(60)
   ]);
   if (tabsRes.error)        console.error('tabs', tabsRes.error);
   if (projectsRes.error)    console.error('projects', projectsRes.error);
   if (actionablesRes.error) console.error('actionables', actionablesRes.error);
   if (prefsRes.error)       console.error('prefs', prefsRes.error);
+  if (journalRes && journalRes.error) console.error('journal', journalRes.error);
 
   state.labels = (tabsRes.data || []).map(t => ({ id: t.id, name: t.name || '', color: t.color || '#ff6b47' }));
 
@@ -3471,12 +3633,20 @@ async function loadStateFromCloud() {
       lastTriggeredDate: prefsRes.data.winddown_last_triggered || null
     };
   }
+  // Journal entries (last 60 days)
+  state.journal = {};
+  (journalRes && journalRes.data || []).forEach(row => {
+    state.journal[row.entry_date] = {
+      q1: row.q1 || '', q2: row.q2 || '', q3: row.q3 || '', q4: row.q4 || ''
+    };
+  });
 }
 
 // ─── Dirty tracking + debounced flush ──────────────────
 const dirty = {
   tabs: new Set(), projects: new Set(), actionables: new Set(),
   delTabs: new Set(), delProjects: new Set(), delActionables: new Set(),
+  journal: new Set(),
   prefs: false
 };
 let flushTimer = null;
@@ -3492,6 +3662,7 @@ function markProjectDeleted(id)  { dirty.delProjects.add(id); dirty.projects.del
 function markActionDirty(id)     { dirty.actionables.add(id); scheduleFlush(); }
 function markActionDeleted(id)   { dirty.delActionables.add(id); dirty.actionables.delete(id); scheduleFlush(); }
 function markPrefsDirty()        { dirty.prefs = true;        scheduleFlush(); }
+function markJournalDirty(date)  { dirty.journal.add(date);   scheduleFlush(); }
 function markAllTabsDirty()      { state.labels.forEach(l => dirty.tabs.add(l.id)); scheduleFlush(); }
 function markAllProjectsDirty()  { state.projects.forEach(p => dirty.projects.add(p.id)); scheduleFlush(); }
 function markProjectActionsDirty(projId) {
@@ -3567,9 +3738,20 @@ async function flushDirty() {
       winddown_last_triggered: w.lastTriggeredDate || null
     }));
   }
+  // Journal entries: upsert each dirty day
+  dirty.journal.forEach(date => {
+    const e = (state.journal && state.journal[date]) || { q1: "", q2: "", q3: "", q4: "" };
+    ops.push(sb.from('journal_entries').upsert({
+      user_id: currentUser.id,
+      entry_date: date,
+      q1: e.q1 || '', q2: e.q2 || '', q3: e.q3 || '', q4: e.q4 || '',
+      updated_at: new Date().toISOString()
+    }));
+  });
   // reset
   dirty.tabs.clear(); dirty.projects.clear(); dirty.actionables.clear();
   dirty.delTabs.clear(); dirty.delProjects.clear(); dirty.delActionables.clear();
+  dirty.journal.clear();
   dirty.prefs = false;
   try {
     const results = await Promise.all(ops);
@@ -3675,7 +3857,9 @@ async function bootstrap() {
         projects: [], labels: [], filters: {},
         keystone: { date: null, text: "", done: false },
         windDown: { hour: 20, minute: 0, lastTriggeredDate: null },
-        deepWork: { active: false, startedAt: null, durationMs: 75 * 60 * 1000 }
+        deepWork: { active: false, startedAt: null, durationMs: 75 * 60 * 1000,
+                    completedToday: 0, completedDate: null },
+        journal: {}
       };
       showAuthScreen();
     }
