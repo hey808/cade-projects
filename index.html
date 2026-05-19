@@ -369,6 +369,107 @@ input.search:focus + kbd { display: none; }
   border-color: var(--accent);
 }
 
+/* History panel — collapsible right-side review of past days */
+.history-toggle {
+  position: fixed;
+  top: 50%; right: 0;
+  transform: translateY(-50%);
+  background: var(--card); border: 1px solid var(--border);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  padding: 12px 8px;
+  cursor: pointer;
+  z-index: 90;
+  color: var(--text-2);
+  transition: color 0.15s, background 0.15s;
+}
+.history-toggle:hover { color: var(--text); background: var(--card-hover); }
+.history-toggle svg { width: 18px; height: 18px; display: block; }
+.history-toggle.open { display: none; }
+
+.history-panel {
+  position: fixed;
+  top: 0; right: 0;
+  height: 100vh;
+  width: 360px;
+  background: var(--card);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 30px rgba(0,0,0,0.35);
+  transform: translateX(100%);
+  transition: transform 0.25s ease-out;
+  z-index: 95;
+  display: flex; flex-direction: column;
+}
+.history-panel.open { transform: translateX(0); }
+.history-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.history-title {
+  font-family: var(--font-serif); font-weight: 500;
+  font-size: 22px; letter-spacing: -0.02em;
+  color: var(--text);
+}
+.history-close {
+  background: none; border: none; color: var(--text-3);
+  font-size: 22px; cursor: pointer; padding: 0 6px; line-height: 1;
+}
+.history-close:hover { color: var(--text); }
+.history-datebar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.history-day-btn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-2); width: 32px; height: 32px;
+  border-radius: 6px; cursor: pointer;
+  font-size: 16px; line-height: 1; font-family: inherit;
+}
+.history-day-btn:hover { color: var(--text); border-color: var(--text-3); }
+.history-date {
+  flex: 1; text-align: center;
+  font-weight: 600; color: var(--text);
+}
+.history-body {
+  flex: 1; overflow-y: auto; padding: 18px;
+}
+.history-section { margin-bottom: 24px; }
+.history-section h3 {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-3);
+  margin-bottom: 10px;
+}
+.history-entry { margin-bottom: 14px; }
+.history-entry .q {
+  font-family: var(--font-serif); font-weight: 500;
+  color: var(--accent); font-size: 14px;
+  margin-bottom: 4px; line-height: 1.3;
+}
+.history-entry .a {
+  font-size: 13px; line-height: 1.55; color: var(--text);
+  white-space: pre-wrap; word-break: break-word;
+}
+.history-entry .a.empty { color: var(--text-4); font-style: italic; }
+.history-task {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px; border-radius: 6px;
+  background: var(--card-hover);
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.history-task .check { color: var(--good); flex-shrink: 0; }
+.history-task .text { flex: 1; color: var(--text); }
+.history-task .proj {
+  font-size: 11px; color: var(--text-3);
+  background: var(--bg); padding: 2px 8px; border-radius: 6px;
+}
+.history-empty {
+  color: var(--text-4); font-style: italic;
+  font-size: 13px;
+}
+
 /* Sidebar: Morning Journal special tab + divider */
 .sidebar-tab.journal-tab {
   font-family: var(--font-serif);
@@ -414,6 +515,15 @@ input.search:focus + kbd { display: none; }
   background: var(--border);
   margin: 10px 8px 10px;
 }
+.sidebar-tab.archive-tab {
+  color: var(--text-3);
+  font-size: 13px;
+}
+.sidebar-tab.archive-tab .archive-icon {
+  width: 14px; height: 14px;
+}
+.sidebar-tab.archive-tab:hover { color: var(--text-2); }
+.sidebar-tab.archive-tab.active { color: var(--text); }
 
 /* Morning Journal view — one question at a time, vertically centered */
 #journal-view {
@@ -712,21 +822,30 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 .tab-edit-popover .delete-btn:hover { color: var(--bad); border-color: var(--bad); background: rgba(239, 68, 68, 0.1); }
 
-/* Filter bar — filters on the left, metric strip on the right */
+/* Filter bar — filters on the left, metrics centered, new-project on the right */
 .filter-bar {
-  display: flex; align-items: center; gap: 12px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
   padding: 0 0 14px;
   margin-bottom: 14px;
   border-bottom: 1px solid var(--border);
 }
 .filter-bar-left {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  justify-self: start;
 }
 .filter-bar-stats {
   display: flex; align-items: center; gap: 18px;
-  margin-left: auto;
+  justify-self: center;
   flex-wrap: wrap;
+}
+.filter-bar > #new-project-btn { justify-self: end; }
+@media (max-width: 720px) {
+  .filter-bar { grid-template-columns: 1fr; }
+  .filter-bar-left, .filter-bar-stats { justify-self: start; }
+  .filter-bar > #new-project-btn { justify-self: start; }
 }
 .filter-bar-deep {
   display: flex; align-items: center; gap: 12px;
@@ -1346,6 +1465,42 @@ ul.items li:hover .row-tool { opacity: 1; }
 }
 .today-item .proj-tag:hover { background: #2a2a30; color: var(--text); }
 
+/* Archive view */
+.archive-header { margin-bottom: 22px; }
+.archive-header h2 {
+  font-family: var(--font-serif); font-weight: 500;
+  font-size: 30px; letter-spacing: -0.02em;
+  color: var(--text);
+  font-variation-settings: "opsz" 72;
+}
+.archive-header .archive-sub {
+  color: var(--text-3); font-size: 13px; margin-top: 4px;
+}
+.archive-list { display: flex; flex-direction: column; gap: 8px; }
+.archive-row {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 14px;
+}
+.archive-row:hover { border-color: var(--border-strong); }
+.archive-row-main { flex: 1; min-width: 0; }
+.archive-row-text { font-size: 14px; color: var(--text); }
+.archive-row-text.done { color: var(--text-3); text-decoration: line-through; }
+.archive-row-meta {
+  display: flex; gap: 12px; align-items: center;
+  margin-top: 4px; font-size: 11px; color: var(--text-4);
+}
+.archive-row-meta .proj-tag {
+  background: var(--card-hover); color: var(--text-2);
+  padding: 2px 8px; border-radius: 6px; font-weight: 500;
+}
+.archive-row-actions { display: flex; gap: 8px; align-items: center; }
+.archive-row-actions .li-rm {
+  background: none; border: none; color: var(--text-4); cursor: pointer;
+  font-size: 16px; padding: 4px 8px;
+}
+.archive-row-actions .li-rm:hover { color: var(--bad); }
+
 /* Home view subtask indentation */
 .today-item[data-depth="1"] { margin-left: 28px; position: relative; }
 .today-item[data-depth="2"] { margin-left: 56px; position: relative; }
@@ -1562,6 +1717,10 @@ ul.items li:hover .row-tool { opacity: 1; }
   <div id="journal-container"></div>
 </div>
 
+<div id="archive-view" style="display:none;">
+  <div id="archive-container"></div>
+</div>
+
 <div id="home-view" style="display:none;">
   <div id="home-list-container"></div>
 </div>
@@ -1570,6 +1729,26 @@ ul.items li:hover .row-tool { opacity: 1; }
   <div id="projects-container"></div>
 </div>
 </main>
+
+<!-- Collapsible right-side history panel: previous-day journal entries + completed tasks -->
+<button class="history-toggle" id="history-toggle" title="Open history">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9"/>
+    <polyline points="12 7 12 12 15 14"/>
+  </svg>
+</button>
+<aside class="history-panel" id="history-panel">
+  <div class="history-head">
+    <div class="history-title">History</div>
+    <button class="history-close" id="history-close" title="Close">×</button>
+  </div>
+  <div class="history-datebar">
+    <button class="history-day-btn" id="history-prev-day" title="Previous day">‹</button>
+    <div class="history-date" id="history-date">—</div>
+    <button class="history-day-btn" id="history-next-day" title="Next day">›</button>
+  </div>
+  <div class="history-body" id="history-body"></div>
+</aside>
 
 <script>
 // ─── Supabase setup ────────────────────────────────────
@@ -1695,6 +1874,8 @@ state.projects.forEach(p => {
     if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
     if (a.parentId === undefined) a.parentId = null;
     if (typeof a.notes !== "string") a.notes = "";
+    if (typeof a.archived !== "boolean") a.archived = false;
+    if (a.archivedAt === undefined) a.archivedAt = null;
     delete a.labels;
     delete a.blockedBy;
     delete a.dueDate;
@@ -1940,7 +2121,8 @@ function addActionable(projId) {
     blocker: "", waitingFor: "",
     createdAt: now, updatedAt: now,
     priority: 0, stuckSince: null, doneAt: null,
-    parentId: null, notes: ""
+    parentId: null, notes: "",
+    archived: false, archivedAt: null
   };
   p.actionables.push(a);
   markActionDirty(a.id);
@@ -1977,6 +2159,38 @@ function updateActionable(projId, itemId, field, value) {
   touchActionable(it);
   markActionDirty(itemId);
   saveState();
+}
+function archiveActionable(projId, itemId) {
+  const p = findProject(projId); if (!p) return;
+  const target = findActionable(p, itemId);
+  if (!target) return;
+  // Archive the item plus its descendants — they hide together
+  const ids = new Set(getDescendants(p, target).map(d => d.id));
+  ids.add(itemId);
+  const now = new Date().toISOString();
+  p.actionables.forEach(a => {
+    if (!ids.has(a.id)) return;
+    a.archived = true;
+    a.archivedAt = now;
+    touchActionable(a);
+    markActionDirty(a.id);
+  });
+  saveState(); renderAll();
+}
+function unarchiveActionable(projId, itemId) {
+  const p = findProject(projId); if (!p) return;
+  const target = findActionable(p, itemId);
+  if (!target) return;
+  const ids = new Set(getDescendants(p, target).map(d => d.id));
+  ids.add(itemId);
+  p.actionables.forEach(a => {
+    if (!ids.has(a.id)) return;
+    a.archived = false;
+    a.archivedAt = null;
+    touchActionable(a);
+    markActionDirty(a.id);
+  });
+  saveState(); renderAll();
 }
 function removeActionable(projId, itemId) {
   const p = findProject(projId); if (!p) return;
@@ -2104,7 +2318,7 @@ function deleteLabel(id) {
 
 // ─── View switching ────────────────────────────────────
 function validViews() {
-  const set = new Set(["journal", "home"]);
+  const set = new Set(["journal", "home", "archive"]);
   if (state.labels.length === 0) set.add("all");
   state.labels.forEach(l => set.add(l.id));
   if (state.projects.some(p => !p.labelId)) set.add("uncategorized");
@@ -2123,7 +2337,9 @@ function setView(view) {
   if (view === 'journal' && prevView !== 'journal') initJournalView();
   document.getElementById('journal-view').style.display  = view === 'journal' ? 'block' : 'none';
   document.getElementById('home-view').style.display     = view === 'home'    ? 'block' : 'none';
-  document.getElementById('projects-view').style.display = (view !== 'home' && view !== 'journal') ? 'block' : 'none';
+  document.getElementById('archive-view').style.display  = view === 'archive' ? 'block' : 'none';
+  document.getElementById('projects-view').style.display =
+    (view !== 'home' && view !== 'journal' && view !== 'archive') ? 'block' : 'none';
   document.body.classList.toggle('journal-mode', view === 'journal');
   renderAll();
 }
@@ -2151,7 +2367,7 @@ function renderTabs() {
   const homeFilters = (state.filters && state.filters["home"]) || { status: "today", priority: null };
   let homeOpen = 0;
   state.projects.forEach(p => p.actionables.forEach(a => {
-    if (a.done) return;
+    if (a.archived || a.done) return;
     if (homeFilters.status !== null && homeFilters.status !== undefined &&
         (a.status || "none") !== homeFilters.status) return;
     if (homeFilters.priority !== null && homeFilters.priority !== undefined &&
@@ -2216,6 +2432,23 @@ function renderTabs() {
     '<span class="name">New tab</span>' +
   '</button>';
 
+  // Archive — sits at the bottom of the tab list, with a divider above
+  const archivedCount = state.projects.reduce((n, p) =>
+    n + p.actionables.filter(a => a.archived).length, 0);
+  html += '<div class="sidebar-divider" style="margin-top:14px"></div>';
+  html += '<div class="sidebar-tab-wrap">' +
+    '<button class="sidebar-tab archive-tab' + (currentView === "archive" ? " active" : "") + '" data-view="archive">' +
+      '<svg class="archive-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect x="3" y="4" width="18" height="6" rx="1"/>' +
+        '<path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/>' +
+        '<line x1="10" y1="14" x2="14" y2="14"/>' +
+      '</svg>' +
+      '<span class="name">Archive</span>' +
+      (archivedCount ? '<span class="pill">' + archivedCount + '</span>' : '') +
+    '</button>' +
+  '</div>';
+
   tabsEl.innerHTML = html;
   wireTabs();
 }
@@ -2226,7 +2459,7 @@ function wireTabs() {
   // Tab click → switch view (but not if clicking the edit icon)
   tabsEl.querySelectorAll('.sidebar-tab').forEach(t => {
     const view = t.dataset.view;
-    const isLabel = !["home", "all", "uncategorized", "journal"].includes(view);
+    const isLabel = !["home", "all", "uncategorized", "journal", "archive"].includes(view);
 
     t.addEventListener('click', (e) => {
       if (e.target.closest('[data-tab-edit]')) return;
@@ -2850,6 +3083,7 @@ function renderDailyDashboard() {
   let todayTotal = 0, todayDone = 0;
   state.projects.forEach(p => {
     p.actionables.forEach(a => {
+      if (a.archived) return;
       if (a.status === "today") {
         todayTotal++;
         if (a.done) todayDone++;
@@ -3032,6 +3266,7 @@ function renderProject(p) {
   const recentDone = [];
   const archived = [];
   p.actionables.forEach(a => {
+    if (a.archived) return; // hidden from project view; lives in Archive tab
     if (filterActive && !passesAllItemFilters(a)) return;
     if (!a.done) { active.push(a); return; }
     // Completed today → still inline. Completed before today → into archive footer.
@@ -3157,6 +3392,16 @@ function renderActionable(p, a, depth) {
       '</svg>' +
     '</a>';
 
+  // Archive button — box-with-arrow icon, hover-revealed like the X
+  const archiveBtn =
+    '<button class="row-tool" data-action="archive-actionable" title="Archive">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect x="3" y="4" width="18" height="6" rx="1"/>' +
+        '<path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/>' +
+        '<line x1="10" y1="14" x2="14" y2="14"/>' +
+      '</svg>' +
+    '</button>';
+
   // Notes toggle — chevron caret. Highlights when notes exist or panel is open.
   const notesOpen = expandedNotes.has(a.id);
   const hasNotes = !!(a.notes && a.notes.trim().length);
@@ -3194,6 +3439,7 @@ function renderActionable(p, a, depth) {
         '</div>' +
         gcalBtn +
         notesBtn +
+        archiveBtn +
         '<button class="li-rm" data-action="remove-actionable" title="Remove">×</button>' +
       '</div>' +
       contextRow +
@@ -3236,6 +3482,8 @@ function wireProjects() {
       if (action === "delete-project")          deleteProject(projId);
       else if (action === "add-actionable")     addActionable(projId);
       else if (action === "remove-actionable")  removeActionable(projId, itemId);
+      else if (action === "archive-actionable") archiveActionable(projId, itemId);
+      else if (action === "unarchive-actionable") unarchiveActionable(projId, itemId);
       else if (action === "cycle-priority")     cyclePriority(projId, itemId);
       else if (action === "toggle-done-footer") {
         if (expandedDone.has(projId)) expandedDone.delete(projId);
@@ -3587,6 +3835,7 @@ function projectsInStatScope() {
 function calcStatsOpenTotal() {
   let n = 0;
   projectsInStatScope().forEach(p => p.actionables.forEach(a => {
+    if (a.archived) return;
     if (!a.done && passesAllItemFilters(a)) n++;
   }));
   return n;
@@ -3594,6 +3843,7 @@ function calcStatsOpenTotal() {
 function calcStatsHighPriority() {
   let n = 0;
   projectsInStatScope().forEach(p => p.actionables.forEach(a => {
+    if (a.archived) return;
     if (!a.done && a.priority === 3 && passesAllItemFilters(a)) n++;
   }));
   return n;
@@ -3606,6 +3856,7 @@ function calcStatsCompletedThisWeek() {
   const sundayMs = sunday.getTime();
   let n = 0;
   projectsInStatScope().forEach(p => p.actionables.forEach(a => {
+    if (a.archived) return;
     if (!a.done || !a.doneAt) return;
     if (new Date(a.doneAt).getTime() < sundayMs) return;
     if (!passesAllItemFilters(a)) return;
@@ -3685,10 +3936,11 @@ function renderHome() {
 
   const groups = [];
   state.projects.forEach(p => {
-    let items = p.actionables.filter(a => !a.done && ok(a));
+    let items = p.actionables.filter(a => !a.archived && !a.done && ok(a));
     if (!items.length) return;
     // Keep ancestor context so indentation makes sense in the Home list
     items = withAncestors(p, items);
+    items = items.filter(a => !a.archived);
     const tree = buildActionableTree(p, items);
     groups.push({ project: p, tree });
   });
@@ -3788,6 +4040,168 @@ function wireHomeView() {
         const el = document.querySelector('[data-project-id="' + wrap.dataset.projectId + '"]');
         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 0);
+    });
+  });
+}
+
+// ─── History panel ────────────────────────────────────
+// Collapsible side panel that shows a previous day's journal answers and
+// the tasks completed that day. Date navigates via the ‹ › buttons.
+let historyDate = todayDateString();
+function dateAddDays(yyyymmdd, delta) {
+  const [y, m, d] = yyyymmdd.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + delta);
+  return dt.getFullYear() + "-" +
+    String(dt.getMonth() + 1).padStart(2, "0") + "-" +
+    String(dt.getDate()).padStart(2, "0");
+}
+function prettyDate(yyyymmdd) {
+  const [y, m, d] = yyyymmdd.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+}
+function renderHistoryPanel() {
+  const dateEl = document.getElementById("history-date");
+  const body   = document.getElementById("history-body");
+  if (!dateEl || !body) return;
+  const isToday = historyDate === todayDateString();
+  dateEl.textContent = isToday ? "Today · " + prettyDate(historyDate) : prettyDate(historyDate);
+
+  // Journal entries for the selected date
+  const entry = (state.journal && state.journal[historyDate]) || null;
+  const hasJournal = entry && JOURNAL_QUESTIONS.some(q => (entry[q.key] || "").trim().length);
+  let journalHtml = '<h3>Journal</h3>';
+  if (!hasJournal) {
+    journalHtml += '<div class="history-empty">No journal entry for this day.</div>';
+  } else {
+    journalHtml += JOURNAL_QUESTIONS.map(q => {
+      const a = (entry[q.key] || "").trim();
+      if (!a) return '';
+      return '<div class="history-entry">' +
+        '<div class="q">' + q.text + '</div>' +
+        '<div class="a">' + escapeAttr(a) + '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  // Completed tasks for the selected date (using doneAt)
+  const completed = [];
+  state.projects.forEach(p => p.actionables.forEach(a => {
+    if (!a.done || !a.doneAt) return;
+    const d = new Date(a.doneAt);
+    const ds = d.getFullYear() + "-" +
+      String(d.getMonth() + 1).padStart(2, "0") + "-" +
+      String(d.getDate()).padStart(2, "0");
+    if (ds === historyDate) completed.push({ p, a });
+  }));
+  let doneHtml = '<h3>Completed (' + completed.length + ')</h3>';
+  if (completed.length === 0) {
+    doneHtml += '<div class="history-empty">Nothing completed on this day.</div>';
+  } else {
+    doneHtml += completed.map(c =>
+      '<div class="history-task">' +
+        '<span class="check">✓</span>' +
+        '<span class="text">' + escapeAttr(c.a.text || "(untitled)") + '</span>' +
+        '<span class="proj">' + escapeAttr(c.p.name || "(untitled)") + '</span>' +
+      '</div>'
+    ).join("");
+  }
+
+  body.innerHTML =
+    '<div class="history-section">' + journalHtml + '</div>' +
+    '<div class="history-section">' + doneHtml + '</div>';
+}
+function openHistoryPanel() {
+  document.getElementById("history-panel").classList.add("open");
+  document.getElementById("history-toggle").classList.add("open");
+  renderHistoryPanel();
+}
+function closeHistoryPanel() {
+  document.getElementById("history-panel").classList.remove("open");
+  document.getElementById("history-toggle").classList.remove("open");
+}
+document.getElementById("history-toggle").addEventListener("click", openHistoryPanel);
+document.getElementById("history-close").addEventListener("click", closeHistoryPanel);
+document.getElementById("history-prev-day").addEventListener("click", () => {
+  historyDate = dateAddDays(historyDate, -1);
+  renderHistoryPanel();
+});
+document.getElementById("history-next-day").addEventListener("click", () => {
+  // Don't navigate into the future
+  const next = dateAddDays(historyDate, 1);
+  if (next > todayDateString()) return;
+  historyDate = next;
+  renderHistoryPanel();
+});
+
+// ─── Render: Archive ──────────────────────────────────
+// Shows every archived actionable across projects, newest first.
+function renderArchive() {
+  const container = document.getElementById("archive-container");
+  const rows = [];
+  state.projects.forEach(p => {
+    p.actionables.forEach(a => {
+      if (a.archived) rows.push({ p, a });
+    });
+  });
+  rows.sort((x, y) => {
+    const xt = x.a.archivedAt ? new Date(x.a.archivedAt).getTime() : 0;
+    const yt = y.a.archivedAt ? new Date(y.a.archivedAt).getTime() : 0;
+    return yt - xt;
+  });
+
+  if (rows.length === 0) {
+    container.innerHTML =
+      '<div class="empty-state">' +
+        '<h2>Archive is empty</h2>' +
+        '<p>Click the archive icon on any task to tuck it away here. Archived items stay around in case you want them back.</p>' +
+      '</div>';
+    return;
+  }
+
+  container.innerHTML =
+    '<div class="archive-header"><h2>Archive</h2>' +
+      '<div class="archive-sub">' + rows.length + ' archived ' +
+      (rows.length === 1 ? 'item' : 'items') + '</div>' +
+    '</div>' +
+    '<div class="archive-list">' +
+      rows.map(r => {
+        const when = r.a.archivedAt
+          ? new Date(r.a.archivedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+          : "";
+        return '<div class="archive-row" data-project-id="' + r.p.id + '" data-item-id="' + r.a.id + '">' +
+          '<div class="archive-row-main">' +
+            '<div class="archive-row-text' + (r.a.done ? " done" : "") + '">' +
+              escapeAttr(r.a.text || "(untitled)") +
+            '</div>' +
+            '<div class="archive-row-meta">' +
+              '<span class="proj-tag">' + escapeAttr(r.p.name || "(untitled project)") + '</span>' +
+              (when ? '<span class="when">archived ' + when + '</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="archive-row-actions">' +
+            '<button class="btn ghost" data-action="restore-archived">Restore</button>' +
+            '<button class="li-rm" data-action="delete-archived" title="Delete forever">×</button>' +
+          '</div>' +
+        '</div>';
+      }).join("") +
+    '</div>';
+  wireArchive();
+}
+function wireArchive() {
+  const c = document.getElementById("archive-container");
+  c.querySelectorAll('[data-action="restore-archived"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest('.archive-row');
+      unarchiveActionable(row.dataset.projectId, row.dataset.itemId);
+    });
+  });
+  c.querySelectorAll('[data-action="delete-archived"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest('.archive-row');
+      if (!confirm("Delete this task forever? This can't be undone.")) return;
+      removeActionable(row.dataset.projectId, row.dataset.itemId);
     });
   });
 }
@@ -3999,11 +4413,14 @@ function renderAll() {
   }
   document.getElementById('journal-view').style.display  = currentView === 'journal' ? 'block' : 'none';
   document.getElementById('home-view').style.display     = currentView === 'home'    ? 'block' : 'none';
-  document.getElementById('projects-view').style.display = (currentView !== 'home' && currentView !== 'journal') ? 'block' : 'none';
+  document.getElementById('archive-view').style.display  = currentView === 'archive' ? 'block' : 'none';
+  document.getElementById('projects-view').style.display =
+    (currentView !== 'home' && currentView !== 'journal' && currentView !== 'archive') ? 'block' : 'none';
   document.body.classList.toggle('journal-mode', currentView === 'journal');
-  if (currentView === "journal")   renderJournal();
-  else if (currentView === "home") renderHome();
-  else                              renderProjects();
+  if (currentView === "journal")      renderJournal();
+  else if (currentView === "archive") renderArchive();
+  else if (currentView === "home")    renderHome();
+  else                                 renderProjects();
 }
 
 // ─── Export / Import ──────────────────────────────────
@@ -4168,6 +4585,8 @@ async function loadStateFromCloud() {
       priority: a.priority || 0, blocker: a.blocker || '', waitingFor: a.waiting_for || '',
       notes: a.notes || '',
       parentId: a.parent_id || null,
+      archived: !!a.archived,
+      archivedAt: a.archived_at || null,
       createdAt: a.created_at, updatedAt: a.updated_at, doneAt: a.done_at, stuckSince: a.stuck_since,
       labels: []
     });
@@ -4279,6 +4698,8 @@ async function flushDirty() {
       blocker: a.blocker || '', waiting_for: a.waitingFor || '',
       notes: a.notes || '',
       parent_id: a.parentId || null,
+      archived: !!a.archived,
+      archived_at: a.archivedAt || null,
       position: loc.position,
       updated_at: a.updatedAt || new Date().toISOString(),
       done_at: a.doneAt || null, stuck_since: a.stuckSince || null
