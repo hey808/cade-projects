@@ -344,47 +344,96 @@ input.search:focus + kbd { display: none; }
   border-color: var(--accent);
 }
 
-/* Morning Journal view */
-#journal-view { max-width: 760px; margin: 0 auto; }
-.journal-header {
-  margin-bottom: 28px;
+/* Sidebar: Morning Journal special tab + divider */
+.sidebar-tab.journal-tab {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  background: rgba(255, 107, 71, 0.05);
+  border: 1px solid rgba(255, 107, 71, 0.18);
+  padding: 10px 12px;
 }
-.journal-header h1 {
+.sidebar-tab.journal-tab:hover {
+  background: rgba(255, 107, 71, 0.10);
+  border-color: rgba(255, 107, 71, 0.32);
+  color: var(--accent);
+}
+.sidebar-tab.journal-tab.active {
+  background: rgba(255, 107, 71, 0.16);
+  border-color: rgba(255, 107, 71, 0.45);
+  color: var(--accent);
+}
+.sidebar-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 8px 10px;
+}
+
+/* Morning Journal view — one question at a time, centered */
+#journal-view { max-width: 720px; margin: 0 auto; padding: 8px 0 40px; }
+.journal-stepper {
+  display: flex; justify-content: center; gap: 10px;
+  margin-bottom: 36px;
+}
+.journal-stepper .step {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: transparent; border: 1.5px solid var(--text-4);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+}
+.journal-stepper .step:hover { border-color: var(--text-3); transform: scale(1.1); }
+.journal-stepper .step.active {
+  background: var(--accent); border-color: var(--accent);
+}
+.journal-stepper .step.filled {
+  background: var(--accent); border-color: var(--accent); opacity: 0.55;
+}
+.journal-card {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 22px;
+  min-height: 360px;
+}
+.journal-card .question {
   font-family: var(--font-serif); font-weight: 500;
-  font-size: 38px; letter-spacing: -0.02em; line-height: 1.1;
+  font-size: 30px; line-height: 1.25; letter-spacing: -0.02em;
   color: var(--text);
+  text-align: center;
+  max-width: 640px;
   font-variation-settings: "opsz" 72;
 }
-.journal-header .subtitle {
-  margin-top: 6px; color: var(--text-3); font-size: 14px;
-}
-.journal-question {
-  margin-bottom: 26px;
-}
-.journal-question .label {
-  font-family: var(--font-serif); font-weight: 500;
-  font-size: 20px; line-height: 1.35; letter-spacing: -0.01em;
-  color: var(--text);
-  margin-bottom: 10px;
-  font-variation-settings: "opsz" 36;
-}
-.journal-question textarea {
-  width: 100%;
+.journal-card textarea {
+  width: 100%; max-width: 640px;
   background: var(--card); border: 1px solid var(--border);
   color: var(--text); font-family: inherit;
-  font-size: 14px; line-height: 1.55;
-  padding: 12px 14px; border-radius: 8px;
-  resize: vertical; min-height: 90px;
+  font-size: 15px; line-height: 1.6;
+  padding: 16px 18px; border-radius: 10px;
+  resize: vertical; min-height: 200px;
+  text-align: left;
 }
-.journal-question textarea:focus {
-  outline: none; border-color: var(--accent);
+.journal-card textarea:focus { outline: none; border-color: var(--accent); }
+.journal-card textarea::placeholder { color: var(--text-4); font-style: italic; }
+.journal-nav {
+  display: flex; justify-content: space-between; align-items: center;
+  width: 100%; max-width: 640px;
+  margin-top: 4px;
 }
-.journal-question textarea::placeholder { color: var(--text-4); font-style: italic; }
-.journal-meta {
-  font-size: 11px; color: var(--text-4);
-  text-align: right;
-  margin-top: -16px; margin-bottom: 18px;
+.journal-nav .nav-btn {
+  background: transparent; border: 1px solid var(--border-strong);
+  color: var(--text-2);
+  padding: 9px 18px; border-radius: 6px;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
 }
+.journal-nav .nav-btn:hover:not(:disabled) { color: var(--text); border-color: var(--text-3); }
+.journal-nav .nav-btn:disabled { opacity: 0.35; cursor: default; }
+.journal-nav .nav-btn.primary {
+  background: var(--accent); color: #0a0a0a;
+  border-color: var(--accent);
+}
+.journal-nav .nav-btn.primary:hover { background: #ff7a59; }
 
 .wind-down-popover {
   position: absolute; top: calc(100% + 6px); right: 0;
@@ -1930,13 +1979,13 @@ function renderTabs() {
   }));
 
   let html = '';
-  // Morning Journal — daily reflection (sits above Home)
+  // Morning Journal — daily reflection (sits above Home with its own treatment)
   html += '<div class="sidebar-tab-wrap">' +
-    '<button class="sidebar-tab' + (currentView === "journal" ? " active" : "") + '" data-view="journal">' +
-      '<span class="dot" style="background:transparent;"></span>' +
+    '<button class="sidebar-tab journal-tab' + (currentView === "journal" ? " active" : "") + '" data-view="journal">' +
       '<span class="name">Morning Journal</span>' +
     '</button>' +
   '</div>';
+  html += '<div class="sidebar-divider"></div>';
   // Home (no color dot — it's the universal view)
   html += '<div class="sidebar-tab-wrap">' +
     '<button class="sidebar-tab' + (currentView === "home" ? " active" : "") + '" data-view="home">' +
@@ -3380,6 +3429,8 @@ const JOURNAL_QUESTIONS = [
   { key: "q3", text: "What are the things you're not doing that you know you should?" },
   { key: "q4", text: "What is the one thing you could accomplish today to consider the day a success?" }
 ];
+let journalStep = 0; // Index of the currently visible question (0–3)
+
 function getJournalEntry(date) {
   if (!state.journal[date]) state.journal[date] = { q1: "", q2: "", q3: "", q4: "" };
   return state.journal[date];
@@ -3389,38 +3440,85 @@ function updateJournal(date, key, value) {
   e[key] = value;
   markJournalDirty(date);
   saveState();
+  // Keep the stepper progress markers in sync without disturbing the textarea
+  refreshJournalStepper();
 }
 function renderJournal() {
   const container = document.getElementById("journal-container");
   const date = todayDateString();
   const entry = getJournalEntry(date);
-  const today = new Date();
-  const dateLabel = today.toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric", year: "numeric"
-  });
-  const questions = JOURNAL_QUESTIONS.map(q =>
-    '<div class="journal-question">' +
-      '<div class="label">' + q.text + '</div>' +
-      '<textarea data-journal-key="' + q.key + '" placeholder="Write…">' +
-        escapeAttr(entry[q.key] || "") +
-      '</textarea>' +
-    '</div>'
-  ).join("");
+  if (journalStep < 0 || journalStep >= JOURNAL_QUESTIONS.length) journalStep = 0;
+  const q = JOURNAL_QUESTIONS[journalStep];
+  const value = entry[q.key] || "";
+
+  const steps = JOURNAL_QUESTIONS.map((qq, i) => {
+    const filled = (entry[qq.key] || "").trim().length > 0;
+    const active = i === journalStep;
+    const cls = "step" + (active ? " active" : (filled ? " filled" : ""));
+    return '<button class="' + cls + '" data-step="' + i + '" ' +
+      'title="Question ' + (i + 1) + (filled ? " · answered" : "") + '"></button>';
+  }).join("");
+
+  const isLast = journalStep === JOURNAL_QUESTIONS.length - 1;
+  const prevDisabled = journalStep === 0 ? " disabled" : "";
+
   container.innerHTML =
-    '<div class="journal-header">' +
-      '<h1>Morning Journal</h1>' +
-      '<div class="subtitle">' + dateLabel + '</div>' +
-    '</div>' +
-    questions;
+    '<div class="journal-stepper">' + steps + '</div>' +
+    '<div class="journal-card">' +
+      '<div class="question">' + q.text + '</div>' +
+      '<textarea id="journal-textarea" placeholder="Write…">' + escapeAttr(value) + '</textarea>' +
+      '<div class="journal-nav">' +
+        '<button class="nav-btn" id="journal-prev"' + prevDisabled + '>← Previous</button>' +
+        '<button class="nav-btn primary" id="journal-next">' +
+          (isLast ? "Done" : "Next →") +
+        '</button>' +
+      '</div>' +
+    '</div>';
   wireJournal();
+  // Auto-focus the textarea for fast typing
+  setTimeout(() => {
+    const ta = document.getElementById("journal-textarea");
+    if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  }, 0);
+}
+function refreshJournalStepper() {
+  const date = todayDateString();
+  const entry = getJournalEntry(date);
+  document.querySelectorAll('.journal-stepper .step').forEach((el, i) => {
+    const filled = (entry[JOURNAL_QUESTIONS[i].key] || "").trim().length > 0;
+    el.classList.toggle("active", i === journalStep);
+    el.classList.toggle("filled", i !== journalStep && filled);
+  });
 }
 function wireJournal() {
   const container = document.getElementById("journal-container");
   const date = todayDateString();
-  container.querySelectorAll('textarea[data-journal-key]').forEach(ta => {
+  const ta = container.querySelector('#journal-textarea');
+  if (ta) {
     ta.addEventListener("input", () => {
-      updateJournal(date, ta.dataset.journalKey, ta.value);
+      updateJournal(date, JOURNAL_QUESTIONS[journalStep].key, ta.value);
     });
+  }
+  container.querySelectorAll('.journal-stepper .step').forEach(btn => {
+    btn.addEventListener("click", () => {
+      const i = parseInt(btn.dataset.step, 10);
+      if (Number.isNaN(i)) return;
+      journalStep = i;
+      renderJournal();
+    });
+  });
+  const prev = container.querySelector('#journal-prev');
+  if (prev) prev.addEventListener("click", () => {
+    if (journalStep > 0) { journalStep--; renderJournal(); }
+  });
+  const next = container.querySelector('#journal-next');
+  if (next) next.addEventListener("click", () => {
+    if (journalStep < JOURNAL_QUESTIONS.length - 1) {
+      journalStep++; renderJournal();
+    } else {
+      // Last question — bounce back to Home
+      setView("home");
+    }
   });
 }
 
