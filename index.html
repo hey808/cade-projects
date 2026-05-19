@@ -2188,17 +2188,21 @@ function getCurrentFilters() {
   let f = state.filters[currentView];
   if (!f) {
     f = (currentView === "home")
-      ? { status: "today", priority: null }
-      : { status: null, priority: null };
+      ? { status: "today", priority: null, age: null }
+      : { status: null, priority: null, age: null };
     state.filters[currentView] = f;
   }
   if (f.status === undefined)   f.status = null;
   if (f.priority === undefined) f.priority = null;
+  if (f.age === undefined)      f.age = null;
   return f;
 }
 function isStatusFilterActive()   { return getCurrentFilters().status !== null; }
 function isPriorityFilterActive() { return getCurrentFilters().priority !== null; }
-function isItemFilterActive()     { return isStatusFilterActive() || isPriorityFilterActive(); }
+function isAgeFilterActive()      { return getCurrentFilters().age !== null; }
+function isItemFilterActive() {
+  return isStatusFilterActive() || isPriorityFilterActive() || isAgeFilterActive();
+}
 function passesStatusFilter(a) {
   const f = getCurrentFilters();
   if (f.status === null) return true;
@@ -2210,19 +2214,37 @@ function passesPriorityFilter(a) {
   if (f.priority === null) return true;
   return a.priority === f.priority;
 }
+function passesAgeFilter(a) {
+  const f = getCurrentFilters();
+  if (f.age === null) return true;
+  const updated = a.updatedAt || a.createdAt;
+  if (!updated) return f.age === "fresh";
+  const ms = Date.now() - new Date(updated).getTime();
+  const hours = ms / 3600000;
+  const days  = hours / 24;
+  switch (f.age) {
+    case "fresh":  return hours < 24;
+    case "normal": return days >= 1 && days < 7;
+    case "warn":   return days >= 7 && days < 14;
+    case "stale":  return days >= 14;
+    default: return true;
+  }
+}
 function passesAllItemFilters(a) {
-  return passesStatusFilter(a) && passesPriorityFilter(a);
+  return passesStatusFilter(a) && passesPriorityFilter(a) && passesAgeFilter(a);
 }
 function setFilter(type, value) {
   const f = getCurrentFilters();
-  if (type === "status")   f.status = value;
+  if (type === "status")        f.status = value;
   else if (type === "priority") f.priority = value;
+  else if (type === "age")      f.age = value;
   saveState();
 }
 function clearFilters() {
   const f = getCurrentFilters();
   f.status = null;
   f.priority = null;
+  f.age = null;
   saveState();
   renderFilterBar();
   if (currentView === "home") renderHome();
@@ -3447,10 +3469,18 @@ function renderFilterBar() {
     { value: 2,    label: "Medium", color: "#eab308" },
     { value: 3,    label: "High",   color: "#dc2626" }
   ];
+  const ageOpts = [
+    { value: null,     label: "All ages" },
+    { value: "fresh",  label: "Fresh (<1d)",  color: "#5c5c64" },
+    { value: "normal", label: "1–6 days",     color: "#888890" },
+    { value: "warn",   label: "7–13 days",    color: "#eab308" },
+    { value: "stale",  label: "14+ days",     color: "#dc2626" }
+  ];
   let leftHtml = "";
   leftHtml += buildDropdownHtml("status",   "Status",   fs.status,   statusOpts);
   leftHtml += buildDropdownHtml("priority", "Priority", fs.priority, priorityOpts);
-  if (isStatusFilterActive() || isPriorityFilterActive()) {
+  leftHtml += buildDropdownHtml("age",      "Age",      fs.age,      ageOpts);
+  if (isStatusFilterActive() || isPriorityFilterActive() || isAgeFilterActive()) {
     leftHtml += '<button class="filter-clear" id="filter-clear-btn">Clear filters</button>';
   }
 
@@ -4221,7 +4251,7 @@ function renderHome() {
   const keystoneHtml = renderKeystone();
   const ok = (a) => passesAllItemFilters(a);
   const filters = getCurrentFilters();
-  const filterActive = filters.status !== null || filters.priority !== null;
+  const filterActive = filters.status !== null || filters.priority !== null || filters.age !== null;
 
   const groups = [];
   state.projects.forEach(p => {
