@@ -346,13 +346,39 @@ input.search:focus + kbd { display: none; }
 }
 .tab-edit-popover .delete-btn:hover { color: var(--bad); border-color: var(--bad); background: rgba(239, 68, 68, 0.1); }
 
-/* Filter bar */
+/* Filter bar — filters on the left, metric strip on the right */
 .filter-bar {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 12px;
   flex-wrap: wrap;
   padding: 0 0 14px;
   margin-bottom: 14px;
   border-bottom: 1px solid var(--border);
+}
+.filter-bar-left {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.filter-bar-stats {
+  display: flex; align-items: center; gap: 18px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+.filter-bar-stats .stat {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  white-space: nowrap;
+}
+.filter-bar-stats .stat .lbl {
+  font-size: 9px; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+}
+.filter-bar-stats .stat .val {
+  font-size: 14px; font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--text);
+  letter-spacing: -0.01em;
+}
+.filter-bar-stats .stat.high .val { color: var(--prio-high); }
+.filter-bar-stats .stat.good .val { color: var(--good); }
+@media (max-width: 720px) {
+  .filter-bar-stats { margin-left: 0; gap: 14px; }
 }
 .filter-dropdown { position: relative; }
 .filter-dropdown-btn {
@@ -836,32 +862,42 @@ ul.items li:hover .row-tool { opacity: 1; }
 }
 .empty-state p { font-size: 12px; margin-bottom: 14px; }
 
-/* Today view: stat strip */
-.today-stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+/* Keystone — the "one thing today" card at the top of Home */
+.keystone-card {
+  background:
+    linear-gradient(135deg, rgba(255,107,71,0.10), rgba(255,107,71,0.02));
+  border: 1px solid rgba(255,107,71,0.30);
+  border-radius: 12px;
+  padding: 16px 18px;
   margin-bottom: 18px;
+  position: relative;
 }
-.today-stat {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
+.keystone-label {
+  font-size: 10px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.10em; font-weight: 700;
+  margin-bottom: 4px;
 }
-.today-stat .lbl {
-  font-size: 10px; color: var(--text-3);
-  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+.keystone-sub {
+  font-size: 11px; color: var(--text-3);
+  margin-bottom: 10px;
 }
-.today-stat .val {
-  font-size: 28px; font-weight: 600; color: var(--text);
-  margin-top: 4px; letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums; line-height: 1.1;
+.keystone-row {
+  display: flex; align-items: center; gap: 12px;
 }
-.today-stat.high .val { color: var(--prio-high); }
-.today-stat.good .val { color: var(--good); }
-.today-stat .sub { font-size: 10px; color: var(--text-4); margin-top: 3px; }
-@media (max-width: 640px) { .today-stats { grid-template-columns: 1fr; } }
+.keystone-row input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 20px; height: 20px; cursor: pointer; flex-shrink: 0;
+}
+.keystone-input {
+  flex: 1; border: none; background: transparent;
+  color: var(--text); font-family: var(--font-serif);
+  font-size: 20px; font-weight: 500;
+  letter-spacing: -0.01em;
+  padding: 4px 0;
+}
+.keystone-input:focus { outline: none; }
+.keystone-input::placeholder { color: var(--text-3); font-style: italic; font-weight: 400; }
+.keystone-input.done { color: var(--text-4); text-decoration: line-through; }
 
 /* Today view */
 .today-list { display: flex; flex-direction: column; gap: 6px; }
@@ -1154,6 +1190,7 @@ let state = loadState();
 state.projects = state.projects || [];
 state.labels = state.labels || [];
 state.filters = state.filters || {};
+state.keystone = state.keystone || { date: null, text: "", done: false };
 // Migrate older flat-shape filters (status/priority/statuses/labelIds at top level)
 // to the new per-view map. The old global filter is discarded — each view now
 // keeps its own filter selection, with "home" lazily defaulting to status="today".
@@ -1967,14 +2004,16 @@ function renderFilterBar() {
     { value: 2,    label: "Medium", color: "#eab308" },
     { value: 3,    label: "High",   color: "#dc2626" }
   ];
-  let html = "";
-  html += buildDropdownHtml("status",   "Status",   fs.status,   statusOpts);
-  html += buildDropdownHtml("priority", "Priority", fs.priority, priorityOpts);
-
+  let leftHtml = "";
+  leftHtml += buildDropdownHtml("status",   "Status",   fs.status,   statusOpts);
+  leftHtml += buildDropdownHtml("priority", "Priority", fs.priority, priorityOpts);
   if (isStatusFilterActive() || isPriorityFilterActive()) {
-    html += '<button class="filter-clear" id="filter-clear-btn">Clear filters</button>';
+    leftHtml += '<button class="filter-clear" id="filter-clear-btn">Clear filters</button>';
   }
-  bar.innerHTML = html;
+  // Stats live on the right edge of the same row, scoped to the active tab
+  bar.innerHTML =
+    '<div class="filter-bar-left">' + leftHtml + '</div>' +
+    renderStatsStrip();
 
   bar.querySelectorAll('.filter-dropdown-btn').forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -2551,64 +2590,97 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// ─── Home tab stats ────────────────────────────────────
+// ─── Tab-aware stats (inline in the filter bar) ───────
+// Scope: Home counts every project; a tab counts only its own projects.
 // All three metrics respect the active per-view filter (status/priority).
-// "Tasks completed" counts done items finished since this Sunday so the
-// number stays meaningful over time.
-function homeFilterPredicate() {
-  return (a) => passesAllItemFilters(a);
+function projectsInStatScope() {
+  if (currentView === "home") return state.projects;
+  return projectsInCurrentView();
 }
-function calcHomeOpenTotal() {
-  const ok = homeFilterPredicate();
+function calcStatsOpenTotal() {
   let n = 0;
-  state.projects.forEach(p => p.actionables.forEach(a => {
-    if (!a.done && ok(a)) n++;
+  projectsInStatScope().forEach(p => p.actionables.forEach(a => {
+    if (!a.done && passesAllItemFilters(a)) n++;
   }));
   return n;
 }
-function calcHomeHighPriority() {
-  const ok = homeFilterPredicate();
+function calcStatsHighPriority() {
   let n = 0;
-  state.projects.forEach(p => p.actionables.forEach(a => {
-    if (!a.done && a.priority === 3 && ok(a)) n++;
+  projectsInStatScope().forEach(p => p.actionables.forEach(a => {
+    if (!a.done && a.priority === 3 && passesAllItemFilters(a)) n++;
   }));
   return n;
 }
-function calcHomeCompletedThisWeek() {
-  const ok = homeFilterPredicate();
+function calcStatsCompletedThisWeek() {
+  // Calendar week starting Sunday at 00:00 local time
   const sunday = new Date();
   sunday.setHours(0, 0, 0, 0);
   sunday.setDate(sunday.getDate() - sunday.getDay());
   const sundayMs = sunday.getTime();
   let n = 0;
-  state.projects.forEach(p => p.actionables.forEach(a => {
+  projectsInStatScope().forEach(p => p.actionables.forEach(a => {
     if (!a.done || !a.doneAt) return;
     if (new Date(a.doneAt).getTime() < sundayMs) return;
-    if (!ok(a)) return;
+    if (!passesAllItemFilters(a)) return;
     n++;
   }));
   return n;
 }
 
-function renderHomeStats() {
-  const total = calcHomeOpenTotal();
-  const high  = calcHomeHighPriority();
-  const done  = calcHomeCompletedThisWeek();
-  return '<div class="today-stats">' +
-    '<div class="today-stat high">' +
-      '<div class="lbl">High priority tasks</div>' +
-      '<div class="val">' + high + '</div>' +
-      '<div class="sub">of ' + total + ' open</div>' +
-    '</div>' +
-    '<div class="today-stat">' +
-      '<div class="lbl">Total tasks</div>' +
-      '<div class="val">' + total + '</div>' +
-      '<div class="sub">open & matching filters</div>' +
-    '</div>' +
-    '<div class="today-stat good">' +
-      '<div class="lbl">Tasks completed</div>' +
-      '<div class="val">' + done + '</div>' +
-      '<div class="sub">since Sunday</div>' +
+function renderStatsStrip() {
+  const total = calcStatsOpenTotal();
+  const high  = calcStatsHighPriority();
+  const done  = calcStatsCompletedThisWeek();
+  return '<div class="filter-bar-stats">' +
+    '<div class="stat high"><span class="lbl">High Prio</span><span class="val">' + high + '</span></div>' +
+    '<div class="stat"><span class="lbl">Total</span><span class="val">' + total + '</span></div>' +
+    '<div class="stat good"><span class="lbl">Completed</span><span class="val">' + done + '</span></div>' +
+  '</div>';
+}
+
+// ─── Keystone (One Thing Today) ───────────────────────
+function todayDateString() {
+  const d = new Date();
+  return d.getFullYear() + "-" +
+    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+    String(d.getDate()).padStart(2, "0");
+}
+function getKeystone() {
+  const today = todayDateString();
+  // If keystone is from a previous day, surface a blank one for today (but
+  // we don't wipe yesterday's text until the user replaces it — they may
+  // want to glance back at what their One Thing was).
+  if (!state.keystone || state.keystone.date !== today) {
+    return { date: today, text: "", done: false, isToday: false,
+             previousText: state.keystone && state.keystone.text || "",
+             previousDate: state.keystone && state.keystone.date || null };
+  }
+  return Object.assign({}, state.keystone, { isToday: true });
+}
+function updateKeystone(field, value) {
+  const today = todayDateString();
+  if (!state.keystone || state.keystone.date !== today) {
+    state.keystone = { date: today, text: "", done: false };
+  }
+  state.keystone[field] = value;
+  if (field === "done") {
+    state.keystone.doneAt = value ? new Date().toISOString() : null;
+  }
+  markPrefsDirty();
+  saveState();
+}
+function renderKeystone() {
+  const k = getKeystone();
+  const today = new Date();
+  const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  return '<div class="keystone-card">' +
+    '<div class="keystone-label">The One Thing</div>' +
+    '<div class="keystone-sub">If I do nothing else today — ' + dateLabel + '</div>' +
+    '<div class="keystone-row">' +
+      '<input type="checkbox" data-action="keystone-done"' + (k.done ? ' checked' : '') + '>' +
+      '<input type="text" class="keystone-input' + (k.done ? ' done' : '') + '" ' +
+        'data-action="keystone-text" placeholder="One thing that would make today count…" ' +
+        'value="' + escapeAttr(k.text) + '">' +
     '</div>' +
   '</div>';
 }
@@ -2619,8 +2691,8 @@ function renderHomeStats() {
 function renderHome() {
   const container = document.getElementById("home-list-container");
 
-  const statsHtml = renderHomeStats();
-  const ok = homeFilterPredicate();
+  const keystoneHtml = renderKeystone();
+  const ok = (a) => passesAllItemFilters(a);
   const filters = getCurrentFilters();
   const filterActive = filters.status !== null || filters.priority !== null;
 
@@ -2646,11 +2718,12 @@ function renderHome() {
       msg = '<h2>No open tasks</h2>' +
             '<p>Add a project and some actionables to get started.</p>';
     }
-    container.innerHTML = statsHtml + '<div class="empty-state">' + msg + '</div>';
+    container.innerHTML = keystoneHtml + '<div class="empty-state">' + msg + '</div>';
+    wireKeystone();
     return;
   }
 
-  container.innerHTML = statsHtml + groups.map(g => {
+  container.innerHTML = keystoneHtml + groups.map(g => {
     const items = g.tree.map(n => n.item);
     const openCount = items.filter(i => !i.done).length;
     const l = findLabel(g.project.labelId);
@@ -2674,6 +2747,25 @@ function renderHome() {
   }).join("");
 
   wireHomeView();
+  wireKeystone();
+}
+
+function wireKeystone() {
+  const container = document.getElementById("home-list-container");
+  const txt = container.querySelector('input[data-action="keystone-text"]');
+  const cb  = container.querySelector('input[data-action="keystone-done"]');
+  if (txt) {
+    txt.addEventListener("input", () => updateKeystone("text", txt.value));
+    txt.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); txt.blur(); }
+    });
+  }
+  if (cb) {
+    cb.addEventListener("change", () => {
+      updateKeystone("done", cb.checked);
+      renderHome();
+    });
+  }
 }
 
 function renderHomeItem(p, a, depth) {
@@ -2900,11 +2992,18 @@ async function loadStateFromCloud() {
   }));
 
   // Per-view filter selections live only in localStorage (state.filters is
-  // already populated from there). Just pull the current view from cloud.
+  // already populated from there). Pull view + keystone from cloud.
   state.filters = state.filters || {};
   let cloudView = (prefsRes.data && prefsRes.data.current_view) || "home";
   if (cloudView === "today") cloudView = "home";
   currentView = cloudView;
+  if (prefsRes.data) {
+    state.keystone = {
+      date: prefsRes.data.keystone_date || null,
+      text: prefsRes.data.keystone_text || "",
+      done: !!prefsRes.data.keystone_done
+    };
+  }
 }
 
 // ─── Dirty tracking + debounced flush ──────────────────
@@ -2987,11 +3086,14 @@ async function flushDirty() {
   dirty.delProjects.forEach(id    => ops.push(sb.from('projects').delete().eq('id', id)));
   dirty.delTabs.forEach(id        => ops.push(sb.from('tabs').delete().eq('id', id)));
   if (dirty.prefs) {
-    // Only the current view name syncs to the cloud — filters are per-tab now
-    // and kept in localStorage so they remain device-local.
+    // Filters stay device-local; only view name + keystone sync.
+    const k = state.keystone || {};
     ops.push(sb.from('user_prefs').upsert({
       user_id: currentUser.id,
-      current_view: currentView || 'home'
+      current_view: currentView || 'home',
+      keystone_date: k.date || null,
+      keystone_text: k.text || '',
+      keystone_done: !!k.done
     }));
   }
   // reset
@@ -3098,7 +3200,7 @@ async function bootstrap() {
       await initAfterAuth();
     } else if (event === 'SIGNED_OUT') {
       currentUser = null;
-      state = { projects: [], labels: [], filters: {} };
+      state = { projects: [], labels: [], filters: {}, keystone: { date: null, text: "", done: false } };
       showAuthScreen();
     }
   });
