@@ -11,18 +11,18 @@
 :root {
   color-scheme: dark;
 
-  /* Dark slate + warm-leather neutrals + red-orange accent */
-  --bg: #21262e;          /* main background — dark slate */
-  --bg-deep: #1a1e25;     /* sidebar / auth — deeper slate */
-  --card: #2c333d;        /* card surface — slate */
-  --card-hover: #353d48;  /* slightly lighter on hover */
-  --border: #3d4452;
-  --border-strong: #525a69;
-  --leather: #6c6660;     /* warm taupe pulled from the leather texture */
-  --text: #f3efea;        /* warm white */
-  --text-2: #bdb8b1;      /* warm light grey */
-  --text-3: #8a857e;
-  --text-4: #5d5852;
+  /* Cool mode (default) — neutral near-black, very low saturation */
+  --bg: #20201E;
+  --bg-deep: #161614;
+  --card: #2a2a27;
+  --card-hover: #34342f;
+  --border: #3a3a36;
+  --border-strong: #4d4d47;
+  --leather: #6c6660;
+  --text: #f0f0ec;
+  --text-2: #b4b4ad;
+  --text-3: #82827b;
+  --text-4: #565651;
   --good: #22c55e;
   --warn: #eab308;
   --bad:  #dc2626;
@@ -37,26 +37,49 @@
   --font-serif: 'Fraunces', Georgia, "Times New Roman", serif;
 }
 
-/* Warm mode — taupe / leather-toned variant of the same palette */
+/* Warm mode — taupe mid-tone base with beige accents */
 body.warm-mode {
-  --bg: #2e2620;
-  --bg-deep: #261e19;
-  --card: #3a3029;
-  --card-hover: #463a32;
-  --border: #4c4138;
-  --border-strong: #5f5247;
-  --leather: #7d7065;
-  --text: #f1e9dc;
-  --text-2: #c4b8a8;
-  --text-3: #8a7d70;
-  --text-4: #5d5246;
+  --bg: #4A443D;
+  --bg-deep: #3c3730;
+  --card: #56504a;
+  --card-hover: #635c54;
+  --border: #6d6459;
+  --border-strong: #857a6c;
+  --leather: #c4b496;            /* beige */
+  --text: #ece2ce;
+  --text-2: #c0b39a;
+  --text-3: #948876;
+  --text-4: #6b6256;
 }
 body.warm-mode .daily-dashboard {
-  background: linear-gradient(135deg, #3a2e22 0%, var(--bg) 100%);
+  background: linear-gradient(135deg, #5a5044 0%, var(--bg) 100%);
 }
-.sidebar-footer .btn.warm-mode-active {
-  color: var(--accent);
-  background: rgba(255, 107, 71, 0.08);
+/* Settings modal: section + theme toggle pills */
+.settings-section { margin-bottom: 18px; }
+.settings-section:last-child { margin-bottom: 0; }
+.theme-toggle {
+  display: inline-flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.theme-toggle .theme-opt {
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.theme-toggle .theme-opt:hover { color: var(--text); }
+.theme-toggle .theme-opt.active {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -791,7 +814,7 @@ body.journal-mode .filter-bar { display: none !important; }
 
 /* Daily progress dashboard — date on left, circular progress on right */
 .daily-dashboard {
-  background: linear-gradient(135deg, #2f2922 0%, var(--bg) 100%);
+  background: linear-gradient(135deg, #2a2926 0%, var(--bg) 100%);
   border: 1px solid rgba(255, 107, 71, 0.28);
   border-radius: 12px;
   padding: 16px 22px;
@@ -1778,8 +1801,7 @@ ul.items li:hover .row-tool { opacity: 1; }
       <button class="sign-out" id="sign-out-btn">Sign out</button>
     </div>
     <input type="file" id="import-file" accept=".json" style="display:none;">
-    <button class="btn" id="wd-settings-btn" title="Wind-down settings">Wind-down settings</button>
-    <button class="btn" id="warm-mode-btn" title="Toggle warm/taupe theme">Warm mode</button>
+    <button class="btn" id="settings-btn" title="Settings">Settings</button>
     <button class="btn" id="import-btn" title="Import projects from JSON">Import</button>
     <button class="btn" id="export-btn" title="Export projects as JSON">Export</button>
   </div>
@@ -2992,6 +3014,7 @@ function renderWindDownModal() {
   if (!wrap) return;
   if (!activeWindDownEditor) { wrap.innerHTML = ""; return; }
   const inEarned = windDownPhase() === "earned";
+  const warm = !!(state.layout && state.layout.warmMode);
   const undoHtml = inEarned
     ? '<button class="wd-undo-btn" id="wd-undo-btn" title="Undo today\'s wind-down — resume the day">Undo today\'s wind-down</button>'
     : '';
@@ -2999,18 +3022,29 @@ function renderWindDownModal() {
     '<div class="wind-down-popover-backdrop" id="wd-modal-backdrop">' +
       '<div class="wind-down-popover" id="wind-down-popover">' +
         '<button class="wd-modal-close" id="wd-modal-close">×</button>' +
-        '<div class="wd-modal-title">Wind-down</div>' +
-        '<div class="wd-title">Day starts</div>' +
-        '<input type="time" class="wd-time-input" id="wd-start-input" ' +
-          'value="' + String(state.windDown.startHour).padStart(2, "0") + ":" +
-                      String(state.windDown.startMinute).padStart(2, "0") + '">' +
-        '<div class="wd-title" style="margin-top:14px">Wind-down time</div>' +
-        '<input type="time" class="wd-time-input" id="wd-time-input" ' +
-          'value="' + String(state.windDown.hour).padStart(2, "0") + ":" +
-                      String(state.windDown.minute).padStart(2, "0") + '">' +
-        '<div class="wd-hint">When the countdown hits zero, every open <strong>Today</strong> task has its status cleared so tomorrow starts blank.</div>' +
-        '<button class="wd-trigger" id="wd-trigger-now">Wind down now</button>' +
-        undoHtml +
+        '<div class="wd-modal-title">Settings</div>' +
+
+        '<div class="settings-section">' +
+          '<div class="wd-title">Appearance</div>' +
+          '<div class="theme-toggle">' +
+            '<button class="theme-opt' + (warm ? "" : " active") + '" data-theme="cool">Cool</button>' +
+            '<button class="theme-opt' + (warm ? " active" : "") + '" data-theme="warm">Warm</button>' +
+          '</div>' +
+        '</div>' +
+
+        '<div class="settings-section">' +
+          '<div class="wd-title">Day starts</div>' +
+          '<input type="time" class="wd-time-input" id="wd-start-input" ' +
+            'value="' + String(state.windDown.startHour).padStart(2, "0") + ":" +
+                        String(state.windDown.startMinute).padStart(2, "0") + '">' +
+          '<div class="wd-title" style="margin-top:14px">Wind-down time</div>' +
+          '<input type="time" class="wd-time-input" id="wd-time-input" ' +
+            'value="' + String(state.windDown.hour).padStart(2, "0") + ":" +
+                        String(state.windDown.minute).padStart(2, "0") + '">' +
+          '<div class="wd-hint">When the countdown hits zero, every open <strong>Today</strong> task has its status cleared so tomorrow starts blank.</div>' +
+          '<button class="wd-trigger" id="wd-trigger-now">Wind down now</button>' +
+          undoHtml +
+        '</div>' +
       '</div>' +
     '</div>';
   wireWindDown();
@@ -3032,6 +3066,22 @@ function renderWindDownModal() {
 }
 
 function wireWindDown() {
+  // Theme toggle inside the Settings modal — Cool / Warm
+  document.querySelectorAll('.theme-opt').forEach(btn => {
+    if (btn.dataset.wired) return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const target = btn.dataset.theme;
+      const want = target === "warm";
+      state.layout = state.layout || {};
+      state.layout.warmMode = want;
+      document.body.classList.toggle("warm-mode", want);
+      saveState();
+      renderWindDownModal(); // re-render so the active pill updates
+    });
+  });
+
   // Undo button on the "earned" card — clears today's trigger so the day
   // resumes. Cleared statuses don't restore (one-way), just the phase flips.
   const undo = document.getElementById("wd-undo-btn");
@@ -4685,34 +4735,11 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("#new-project-btn")) addProject();
 });
 
-// Wind-down settings modal — opened only from the sidebar footer button
-document.getElementById("wd-settings-btn").addEventListener("click", () => {
+// Settings modal — single entry point for theme + wind-down
+document.getElementById("settings-btn").addEventListener("click", () => {
   activeWindDownEditor = true;
   renderWindDownModal();
-  setTimeout(() => {
-    const inp = document.getElementById("wd-start-input");
-    if (inp) inp.focus();
-  }, 0);
 });
-
-// Warm-mode toggle — flips the palette to taupe and persists to localStorage
-(function () {
-  const btn = document.getElementById("warm-mode-btn");
-  if (!btn) return;
-  function reflect() {
-    const on = !!(state.layout && state.layout.warmMode);
-    btn.textContent = on ? "Warm mode ✓" : "Warm mode";
-    btn.classList.toggle("warm-mode-active", on);
-  }
-  reflect();
-  btn.addEventListener("click", () => {
-    state.layout = state.layout || {};
-    state.layout.warmMode = !state.layout.warmMode;
-    document.body.classList.toggle("warm-mode", state.layout.warmMode);
-    saveState();
-    reflect();
-  });
-})();
 
 // ─── Auth + Cloud Sync ─────────────────────────────────
 function showAuthScreen() {
