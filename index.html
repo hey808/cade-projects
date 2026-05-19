@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Slate</title>
+<link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%23ff6b47"/><text x="16" y="23" text-anchor="middle" fill="%23ffffff" font-family="Georgia, serif" font-size="22" font-weight="600">S</text></svg>'>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1664,6 +1665,7 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
 .status-chip.today      { background: rgba(255, 107, 71, 0.18); color: var(--accent);     border-color: var(--accent); }
 .status-chip.backburner { background: rgba(113, 113, 122, 0.18); color: var(--text-2);    border-color: var(--text-3); }
 .status-chip.waiting    { background: rgba(59, 130, 246, 0.15);  color: var(--waiting);   border-color: var(--waiting); }
+.status-chip.done-chip  { background: rgba(34, 197, 94, 0.15);   color: var(--good);      border-color: var(--good); }
 .status-chip.stuck      { background: rgba(239, 68, 68, 0.15);   color: var(--bad);       border-color: var(--bad); }
 .status-chip .dot {
   width: 7px; height: 7px; border-radius: 50%; display: inline-block;
@@ -1829,9 +1831,9 @@ ul.items li:hover .row-tool { opacity: 1; }
 }
 .keystone-input {
   flex: 1; border: none; background: transparent;
-  color: var(--text); font-family: var(--font-serif);
-  font-size: 20px; font-weight: 500;
-  letter-spacing: -0.01em;
+  color: var(--text); font-family: var(--font-sans);
+  font-size: 18px; font-weight: 500;
+  letter-spacing: -0.005em;
   padding: 4px 0;
 }
 .keystone-input:focus { outline: none; }
@@ -2172,11 +2174,10 @@ try {
 }
 
 // ─── Status definitions ────────────────────────────────
-const STATUSES = ["in_progress", "backburner", "waiting", "stuck"];
+const STATUSES = ["in_progress", "backburner", "stuck"];
 const STATUS_META = {
   in_progress: { label: "In progress", color: "#ff6b47" },
   backburner:  { label: "Backburner",  color: "#888890" },
-  waiting:     { label: "Waiting",     color: "#3b82f6" },
   stuck:       { label: "Stuck",       color: "#dc2626" }
 };
 
@@ -2289,6 +2290,8 @@ state.projects.forEach(p => {
       a.status = "in_progress";
       a.today = true;
     }
+    // Waiting status removed — clear it
+    if (a.status === "waiting") a.status = null;
     if (typeof a.today !== "boolean") a.today = false;
     delete a.labels;
     delete a.blockedBy;
@@ -3775,7 +3778,6 @@ function renderFilterBar() {
     { value: null,         label: "All" },
     { value: "in_progress",label: "In progress", color: "#ff6b47" },
     { value: "backburner", label: "Backburner",  color: "#888890" },
-    { value: "waiting",    label: "Waiting",     color: "#3b82f6" },
     { value: "stuck",      label: "Stuck",       color: "#dc2626" },
     { value: "none",       label: "No status",   color: "#4d4d54" }
   ];
@@ -3787,11 +3789,11 @@ function renderFilterBar() {
     { value: "stale",  label: "14+ days",     color: "#dc2626" }
   ];
   let leftHtml = "";
-  leftHtml += buildDropdownHtml("status", "Status", fs.status, statusOpts);
-  // Today filter — binary toggle button (replaces the old Priority dropdown)
+  // Today filter — binary toggle button leads the row
   leftHtml += '<button class="filter-toggle' + (fs.today ? " active" : "") + '" ' +
     'id="filter-today-toggle" title="Show only today\'s list">' +
     '<span class="dot"></span><span>Today</span></button>';
+  leftHtml += buildDropdownHtml("status", "Status", fs.status, statusOpts);
   leftHtml += buildDropdownHtml("age", "Age", fs.age, ageOpts);
   if (isStatusFilterActive() || isTodayFilterActive() || isAgeFilterActive()) {
     leftHtml += '<button class="filter-clear" id="filter-clear-btn">Clear filters</button>';
@@ -3957,6 +3959,11 @@ function renderProject(p) {
 }
 
 function renderStatusChip(p, a) {
+  // A completed actionable always reads DONE (green), regardless of status
+  if (a.done) {
+    return '<button class="status-chip done-chip" data-action="open-status-picker">' +
+      '<span class="dot" style="background:var(--good);"></span>DONE</button>';
+  }
   const s = a.status;
   if (!s) {
     return '<button class="status-chip unset" data-action="open-status-picker">Status</button>';
@@ -4011,13 +4018,6 @@ function renderActionable(p, a, depth) {
         '<input type="text" data-action="update-blocker" ' +
           'placeholder="What\'s in the way?" value="' + escapeAttr(a.blocker || "") + '">' +
       '</div>';
-  } else if (a.status === "waiting") {
-    contextRow =
-      '<div class="context-row waiting">' +
-        '<span class="lbl">Waiting for:</span>' +
-        '<input type="text" data-action="update-waiting-for" ' +
-          'placeholder="Who or what?" value="' + escapeAttr(a.waitingFor || "") + '">' +
-      '</div>';
   }
 
   // Google Calendar prefill — opens calendar.google.com with a templated event
@@ -4071,10 +4071,10 @@ function renderActionable(p, a, depth) {
       '<div class="item-row">' +
         '<span class="item-drag-handle" data-item-drag-handle>⋮⋮</span>' +
         '<input type="checkbox" data-action="toggle-actionable"' + (a.done ? " checked" : "") + '>' +
-        todayBtn +
         '<input type="text" class="item-text" data-action="update-actionable" ' +
           'placeholder="What needs to be done?" value="' + escapeAttr(a.text) + '">' +
         ageBadge +
+        todayBtn +
         '<div class="status-wrap">' +
           renderStatusChip(p, a) +
           renderStatusPicker(p, a) +
@@ -4661,13 +4661,6 @@ function renderHomeItem(p, a, depth) {
         '<span class="lbl">Blocker:</span>' +
         '<input type="text" data-action="update-blocker" ' +
           'placeholder="What\'s in the way?" value="' + escapeAttr(a.blocker || "") + '">' +
-      '</div>';
-  } else if (a.status === "waiting") {
-    contextRow =
-      '<div class="context-row waiting">' +
-        '<span class="lbl">Waiting for:</span>' +
-        '<input type="text" data-action="update-waiting-for" ' +
-          'placeholder="Who or what?" value="' + escapeAttr(a.waitingFor || "") + '">' +
       '</div>';
   }
   return (
@@ -5530,10 +5523,11 @@ async function loadStateFromCloud() {
 
   const byProject = {};
   (actionablesRes.data || []).forEach(a => {
-    // Migrate legacy cloud rows where status was "today"
+    // Migrate legacy cloud rows where status was "today" / "waiting"
     let st = a.status || null;
     let todayFlag = !!a.today;
     if (st === "today") { st = "in_progress"; todayFlag = true; }
+    if (st === "waiting") st = null;
     (byProject[a.project_id] = byProject[a.project_id] || []).push({
       id: a.id, text: a.text || '', done: !!a.done, status: st,
       priority: a.priority || 0, blocker: a.blocker || '', waitingFor: a.waiting_for || '',
