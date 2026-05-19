@@ -823,9 +823,9 @@ body.journal-mode .filter-bar { display: none !important; }
   position: relative;
   transition: opacity 0.15s;
   display: grid;
-  grid-template-columns: minmax(0, 30%) 1fr;
-  gap: 28px;
-  align-items: start;
+  grid-template-columns: minmax(0, var(--proj-split, 30%)) 6px 1fr;
+  gap: 18px;
+  align-items: stretch;
 }
 .project:hover { border-color: var(--border-strong); }
 .project::before {
@@ -904,10 +904,39 @@ body.journal-mode .filter-bar { display: none !important; }
 /* Right column: actionables */
 .proj-body { min-width: 0; }
 
-/* Narrow screens: stack header above actionables */
+/* Resizable column divider sitting between the title and the actionables */
+.proj-divider {
+  align-self: stretch;
+  cursor: col-resize;
+  position: relative;
+  user-select: none;
+  /* Wider hit zone than the visible line */
+}
+.proj-divider::before {
+  content: ""; position: absolute;
+  left: 50%; top: 8%; bottom: 8%;
+  width: 1px; transform: translateX(-50%);
+  background: var(--border);
+  transition: background 0.15s, width 0.15s;
+  border-radius: 1px;
+  pointer-events: none;
+}
+.proj-divider:hover::before {
+  width: 3px;
+  background: var(--border-strong);
+}
+.proj-divider.dragging::before {
+  width: 3px;
+  background: var(--accent);
+}
+body.proj-resizing { cursor: col-resize; user-select: none; }
+body.proj-resizing * { cursor: col-resize !important; }
+
+/* Narrow screens: stack header above actionables, hide the divider */
 @media (max-width: 720px) {
   .project { grid-template-columns: 1fr; gap: 14px; padding-right: 18px; }
   .proj-header { padding-right: 60px; }
+  .proj-divider { display: none; }
 }
 
 /* Project label chip */
@@ -1556,6 +1585,13 @@ if (state.deepWork.active && state.deepWork.startedAt) {
 
 // Morning Journal — date-keyed map of { q1, q2, q3, q4 }
 state.journal = state.journal || {};
+
+// Layout prefs (device-local) — currently just the project-card split %
+state.layout = state.layout || { projectSplit: 30 };
+if (typeof state.layout.projectSplit !== "number") state.layout.projectSplit = 30;
+state.layout.projectSplit = Math.max(15, Math.min(70, state.layout.projectSplit));
+// Apply it now so first paint reflects the saved width
+document.documentElement.style.setProperty('--proj-split', state.layout.projectSplit + '%');
 // Migrate older flat-shape filters (status/priority/statuses/labelIds at top level)
 // to the new per-view map. The old global filter is discarded — each view now
 // keeps its own filter selection, with "home" lazily defaulting to status="today".
@@ -2852,6 +2888,7 @@ function renderProject(p) {
         '</div>' +
         '<div class="proj-meta">Actionables<span class="count">' + active.length + ' open</span></div>' +
       '</div>' +
+      '<div class="proj-divider" data-proj-divider title="Drag to resize"></div>' +
       '<div class="proj-body">' +
         '<ul class="items actionables-list">' +
           (flat.length === 0
@@ -3139,8 +3176,57 @@ document.addEventListener("click", (e) => {
 });
 
 // ─── Drag and drop ─────────────────────────────────────
+// Resizable split between project name and actionables (global preference).
+let _projSplitDrag = null;
+function startProjectSplitDrag(e, divider, article) {
+  e.preventDefault();
+  const rect = article.getBoundingClientRect();
+  // Account for the card's left padding so the percent maps to the grid area
+  const cs = getComputedStyle(article);
+  const padL = parseFloat(cs.paddingLeft)  || 0;
+  const padR = parseFloat(cs.paddingRight) || 0;
+  _projSplitDrag = {
+    divider,
+    contentLeft: rect.left + padL,
+    contentWidth: rect.width - padL - padR
+  };
+  divider.classList.add('dragging');
+  document.body.classList.add('proj-resizing');
+  document.addEventListener('mousemove', onProjectSplitMove);
+  document.addEventListener('mouseup', endProjectSplitDrag);
+}
+function onProjectSplitMove(e) {
+  if (!_projSplitDrag) return;
+  const x = e.clientX - _projSplitDrag.contentLeft;
+  let pct = (x / _projSplitDrag.contentWidth) * 100;
+  pct = Math.max(15, Math.min(70, pct));
+  document.documentElement.style.setProperty('--proj-split', pct + '%');
+  _projSplitDrag.lastPct = pct;
+}
+function endProjectSplitDrag() {
+  if (!_projSplitDrag) return;
+  const finalPct = _projSplitDrag.lastPct;
+  _projSplitDrag.divider.classList.remove('dragging');
+  document.body.classList.remove('proj-resizing');
+  document.removeEventListener('mousemove', onProjectSplitMove);
+  document.removeEventListener('mouseup', endProjectSplitDrag);
+  _projSplitDrag = null;
+  if (typeof finalPct === "number") {
+    state.layout = state.layout || {};
+    state.layout.projectSplit = Math.round(finalPct * 10) / 10;
+    saveState();
+  }
+}
+
 function attachDragHandlers() {
   document.querySelectorAll('.project').forEach(article => {
+    // Column-split divider: drag to resize the project-name column globally
+    const divider = article.querySelector('[data-proj-divider]');
+    if (divider && !divider.dataset.wired) {
+      divider.dataset.wired = "1";
+      divider.addEventListener("mousedown", (e) => startProjectSplitDrag(e, divider, article));
+    }
+
     const handle = article.querySelector('[data-drag-handle]');
     if (!handle) return;
     handle.addEventListener("mousedown", () => { article.draggable = true; });
