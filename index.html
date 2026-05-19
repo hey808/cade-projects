@@ -854,6 +854,12 @@ input.search:focus + kbd { display: none; }
 }
 .jt-select:focus { outline: none; border-color: var(--accent); }
 .jt-select:disabled { opacity: 0.5; cursor: not-allowed; }
+.jt-today-check {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-2);
+  cursor: pointer;
+}
+.jt-today-check input { accent-color: var(--accent); width: 14px; height: 14px; }
 .jt-row .btn.accent { margin-left: auto; padding: 9px 16px; font-size: 13px; }
 .jt-new-proj-input { min-width: 180px; }
 .jt-iconbtn {
@@ -1534,19 +1540,43 @@ ul.items input.item-text:focus { outline: none; }
 ul.items input.item-text::placeholder { color: var(--text-4); }
 ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-through; }
 
-/* Priority chip */
-.priority-chip {
+/* Today toggle pill — replaces the old priority chip on each task row */
+.today-toggle {
   background: transparent; border: 1px solid var(--border-strong);
   color: var(--text-4);
-  padding: 2px 7px; border-radius: 8px; font-size: 10px;
-  cursor: pointer; font-family: inherit; font-weight: 700;
-  letter-spacing: 0.04em; white-space: nowrap; flex-shrink: 0;
-  min-width: 24px; text-align: center;
+  padding: 2px 9px; border-radius: 9px;
+  cursor: pointer; font-family: inherit;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.06em; white-space: nowrap; flex-shrink: 0;
 }
-.priority-chip:hover { background: var(--card-hover); color: var(--text-2); }
-.priority-chip.p-1 { background: rgba(59, 130, 246, 0.15); color: var(--prio-low); border-color: var(--prio-low); }
-.priority-chip.p-2 { background: rgba(234, 179, 8, 0.15); color: var(--prio-med); border-color: var(--prio-med); }
-.priority-chip.p-3 { background: rgba(239, 68, 68, 0.15); color: var(--prio-high); border-color: var(--prio-high); }
+.today-toggle:hover { background: var(--card-hover); color: var(--text-2); }
+.today-toggle.on {
+  background: rgba(255, 107, 71, 0.18);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Gray out rows that aren't on today's list */
+.actionables-list > li.not-today { opacity: 0.55; }
+.actionables-list > li.not-today input.item-text { color: var(--text-3); }
+
+/* Today filter toggle in the filter bar */
+.filter-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text-2); padding: 7px 12px; border-radius: 6px;
+  font-size: 12px; font-weight: 500;
+  cursor: pointer; font-family: inherit;
+}
+.filter-toggle:hover { border-color: var(--border-strong); color: var(--text); }
+.filter-toggle.active {
+  border-color: var(--accent); color: var(--accent);
+  background: rgba(255, 107, 71, 0.10);
+}
+.filter-toggle .dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--text-4);
+}
+.filter-toggle.active .dot { background: var(--accent); }
 
 /* Age badge (since last update) */
 .meta-badge {
@@ -2083,12 +2113,12 @@ try {
 }
 
 // ─── Status definitions ────────────────────────────────
-const STATUSES = ["today", "backburner", "waiting", "stuck"];
+const STATUSES = ["in_progress", "backburner", "waiting", "stuck"];
 const STATUS_META = {
-  today:      { label: "Today",      color: "#ff6b47" },
-  backburner: { label: "Backburner", color: "#888890" },
-  waiting:    { label: "Waiting",    color: "#3b82f6" },
-  stuck:      { label: "Stuck",      color: "#dc2626" }
+  in_progress: { label: "In progress", color: "#ff6b47" },
+  backburner:  { label: "Backburner",  color: "#888890" },
+  waiting:     { label: "Waiting",     color: "#3b82f6" },
+  stuck:       { label: "Stuck",       color: "#dc2626" }
 };
 
 // ─── State ──────────────────────────────────────────────
@@ -2195,6 +2225,12 @@ state.projects.forEach(p => {
     if (typeof a.notes !== "string") a.notes = "";
     if (typeof a.archived !== "boolean") a.archived = false;
     if (a.archivedAt === undefined) a.archivedAt = null;
+    // Migrate legacy status "today" → "in_progress" + today=true flag
+    if (a.status === "today") {
+      a.status = "in_progress";
+      a.today = true;
+    }
+    if (typeof a.today !== "boolean") a.today = false;
     delete a.labels;
     delete a.blockedBy;
     delete a.dueDate;
@@ -2259,20 +2295,24 @@ function getCurrentFilters() {
   let f = state.filters[currentView];
   if (!f) {
     f = (currentView === "home")
-      ? { status: "today", priority: null, age: null }
-      : { status: null, priority: null, age: null };
+      ? { status: null, today: true,  age: null }   // Home defaults to today=on
+      : { status: null, today: false, age: null };
     state.filters[currentView] = f;
   }
   if (f.status === undefined)   f.status = null;
-  if (f.priority === undefined) f.priority = null;
+  if (f.today === undefined)    f.today = false;
   if (f.age === undefined)      f.age = null;
+  // Drop legacy priority — replaced by Today
+  delete f.priority;
+  // Legacy status "today" no longer exists — clear it
+  if (f.status === "today") f.status = null;
   return f;
 }
-function isStatusFilterActive()   { return getCurrentFilters().status !== null; }
-function isPriorityFilterActive() { return getCurrentFilters().priority !== null; }
-function isAgeFilterActive()      { return getCurrentFilters().age !== null; }
+function isStatusFilterActive() { return getCurrentFilters().status !== null; }
+function isTodayFilterActive()  { return getCurrentFilters().today === true; }
+function isAgeFilterActive()    { return getCurrentFilters().age !== null; }
 function isItemFilterActive() {
-  return isStatusFilterActive() || isPriorityFilterActive() || isAgeFilterActive();
+  return isStatusFilterActive() || isTodayFilterActive() || isAgeFilterActive();
 }
 function passesStatusFilter(a) {
   const f = getCurrentFilters();
@@ -2280,10 +2320,9 @@ function passesStatusFilter(a) {
   const aStatus = a.status || "none";
   return aStatus === f.status;
 }
-function passesPriorityFilter(a) {
-  const f = getCurrentFilters();
-  if (f.priority === null) return true;
-  return a.priority === f.priority;
+function passesTodayFilter(a) {
+  if (!isTodayFilterActive()) return true;
+  return a.today === true;
 }
 function passesAgeFilter(a) {
   const f = getCurrentFilters();
@@ -2302,20 +2341,20 @@ function passesAgeFilter(a) {
   }
 }
 function passesAllItemFilters(a) {
-  return passesStatusFilter(a) && passesPriorityFilter(a) && passesAgeFilter(a);
+  return passesStatusFilter(a) && passesTodayFilter(a) && passesAgeFilter(a);
 }
 function setFilter(type, value) {
   const f = getCurrentFilters();
-  if (type === "status")        f.status = value;
-  else if (type === "priority") f.priority = value;
-  else if (type === "age")      f.age = value;
+  if (type === "status")     f.status = value;
+  else if (type === "today") f.today  = !!value;
+  else if (type === "age")   f.age    = value;
   saveState();
 }
 function clearFilters() {
   const f = getCurrentFilters();
   f.status = null;
-  f.priority = null;
-  f.age = null;
+  f.today  = false;
+  f.age    = null;
   saveState();
   renderFilterBar();
   if (currentView === "home") renderHome();
@@ -2463,7 +2502,8 @@ function addActionable(projId) {
     createdAt: now, updatedAt: now,
     priority: 0, stuckSince: null, doneAt: null,
     parentId: null, notes: "",
-    archived: false, archivedAt: null
+    archived: false, archivedAt: null,
+    today: false
   };
   p.actionables.push(a);
   markActionDirty(a.id);
@@ -2500,6 +2540,15 @@ function updateActionable(projId, itemId, field, value) {
   touchActionable(it);
   markActionDirty(itemId);
   saveState();
+}
+function toggleTodayFlag(projId, itemId) {
+  const p = findProject(projId); if (!p) return;
+  const a = findActionable(p, itemId); if (!a) return;
+  a.today = !a.today;
+  touchActionable(a);
+  markActionDirty(itemId);
+  saveState();
+  renderAll();
 }
 function archiveActionable(projId, itemId) {
   const p = findProject(projId); if (!p) return;
@@ -2705,14 +2754,11 @@ function renderTabs() {
   const tabsEl = document.getElementById("tabs");
   // Home pill: reflect what the Home view is currently showing — counts open
   // items that match the Home tab's saved status filter (defaults to "today").
-  const homeFilters = (state.filters && state.filters["home"]) || { status: "today", priority: null };
+  // Home pill mirrors the Home view's today filter: count today=true open items
   let homeOpen = 0;
   state.projects.forEach(p => p.actionables.forEach(a => {
     if (a.archived || a.done) return;
-    if (homeFilters.status !== null && homeFilters.status !== undefined &&
-        (a.status || "none") !== homeFilters.status) return;
-    if (homeFilters.priority !== null && homeFilters.priority !== undefined &&
-        a.priority !== homeFilters.priority) return;
+    if (!a.today) return;
     homeOpen++;
   }));
 
@@ -3468,7 +3514,7 @@ function renderDailyDashboard() {
   state.projects.forEach(p => {
     p.actionables.forEach(a => {
       if (a.archived) return;
-      if (a.status === "today") {
+      if (a.today) {
         todayTotal++;
         if (a.done) todayDone++;
       }
@@ -3528,19 +3574,12 @@ function renderFilterBar() {
   const fs = getCurrentFilters();
 
   const statusOpts = [
-    { value: null,        label: "All" },
-    { value: "today",     label: "Today",      color: "#ff6b47" },
-    { value: "backburner",label: "Backburner", color: "#888890" },
-    { value: "waiting",   label: "Waiting",    color: "#3b82f6" },
-    { value: "stuck",     label: "Stuck",      color: "#dc2626" },
-    { value: "none",      label: "No status",  color: "#4d4d54" }
-  ];
-  const priorityOpts = [
-    { value: null, label: "All" },
-    { value: 0,    label: "None",   color: "#5c5c64" },
-    { value: 1,    label: "Low",    color: "#3b82f6" },
-    { value: 2,    label: "Medium", color: "#eab308" },
-    { value: 3,    label: "High",   color: "#dc2626" }
+    { value: null,         label: "All" },
+    { value: "in_progress",label: "In progress", color: "#ff6b47" },
+    { value: "backburner", label: "Backburner",  color: "#888890" },
+    { value: "waiting",    label: "Waiting",     color: "#3b82f6" },
+    { value: "stuck",      label: "Stuck",       color: "#dc2626" },
+    { value: "none",       label: "No status",   color: "#4d4d54" }
   ];
   const ageOpts = [
     { value: null,     label: "All ages" },
@@ -3550,10 +3589,13 @@ function renderFilterBar() {
     { value: "stale",  label: "14+ days",     color: "#dc2626" }
   ];
   let leftHtml = "";
-  leftHtml += buildDropdownHtml("status",   "Status",   fs.status,   statusOpts);
-  leftHtml += buildDropdownHtml("priority", "Priority", fs.priority, priorityOpts);
-  leftHtml += buildDropdownHtml("age",      "Age",      fs.age,      ageOpts);
-  if (isStatusFilterActive() || isPriorityFilterActive() || isAgeFilterActive()) {
+  leftHtml += buildDropdownHtml("status", "Status", fs.status, statusOpts);
+  // Today filter — binary toggle button (replaces the old Priority dropdown)
+  leftHtml += '<button class="filter-toggle' + (fs.today ? " active" : "") + '" ' +
+    'id="filter-today-toggle" title="Show only today\'s list">' +
+    '<span class="dot"></span><span>Today</span></button>';
+  leftHtml += buildDropdownHtml("age", "Age", fs.age, ageOpts);
+  if (isStatusFilterActive() || isTodayFilterActive() || isAgeFilterActive()) {
     leftHtml += '<button class="filter-clear" id="filter-clear-btn">Clear filters</button>';
   }
 
@@ -3594,6 +3636,15 @@ function renderFilterBar() {
   });
   const clearBtn = document.getElementById("filter-clear-btn");
   if (clearBtn) clearBtn.addEventListener("click", clearFilters);
+  const todayToggle = document.getElementById("filter-today-toggle");
+  if (todayToggle) todayToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setFilter("today", !isTodayFilterActive());
+    renderFilterBar();
+    if (currentView === "home") renderHome();
+    else renderProjects();
+    renderTabs();
+  });
 }
 
 document.addEventListener("click", (e) => {
@@ -3745,9 +3796,9 @@ function renderStatusPicker(p, a) {
 
 function renderActionable(p, a, depth) {
   depth = depth || 0;
-  const prioLabels = ["P", "LOW", "MED", "HIGH"];
-  const prioBtn = '<button class="priority-chip p-' + a.priority + '" data-action="cycle-priority" title="Cycle priority">' +
-    (a.priority === 0 ? "P" : prioLabels[a.priority]) + '</button>';
+  // Today toggle replaces the old priority chip — clickable pill that flips a.today
+  const todayBtn = '<button class="today-toggle' + (a.today ? " on" : "") + '" ' +
+    'data-action="toggle-today" title="Toggle today">TODAY</button>';
 
   const ageInfo = ageBadgeData(a.updatedAt || a.createdAt);
   const ageBadge = ageInfo
@@ -3816,12 +3867,13 @@ function renderActionable(p, a, depth) {
       '</div>'
     : "";
 
+  const todayCls = a.today ? "" : " not-today";
   return (
-    '<li data-item-id="' + a.id + '" data-depth="' + depth + '" class="' + (a.done ? "done" : "") + '">' +
+    '<li data-item-id="' + a.id + '" data-depth="' + depth + '" class="' + (a.done ? "done" : "") + todayCls + '">' +
       '<div class="item-row">' +
         '<span class="item-drag-handle" data-item-drag-handle>⋮⋮</span>' +
         '<input type="checkbox" data-action="toggle-actionable"' + (a.done ? " checked" : "") + '>' +
-        prioBtn +
+        todayBtn +
         '<input type="text" class="item-text" data-action="update-actionable" ' +
           'placeholder="What needs to be done?" value="' + escapeAttr(a.text) + '">' +
         ageBadge +
@@ -3876,7 +3928,7 @@ function wireProjects() {
       else if (action === "remove-actionable")  removeActionable(projId, itemId);
       else if (action === "archive-actionable") archiveActionable(projId, itemId);
       else if (action === "unarchive-actionable") unarchiveActionable(projId, itemId);
-      else if (action === "cycle-priority")     cyclePriority(projId, itemId);
+      else if (action === "toggle-today")       toggleTodayFlag(projId, itemId);
       else if (action === "toggle-done-footer") {
         if (expandedDone.has(projId)) expandedDone.delete(projId);
         else expandedDone.add(projId);
@@ -4232,11 +4284,11 @@ function calcStatsOpenTotal() {
   }));
   return n;
 }
-function calcStatsHighPriority() {
+function calcStatsTodayCount() {
   let n = 0;
   projectsInStatScope().forEach(p => p.actionables.forEach(a => {
     if (a.archived) return;
-    if (!a.done && a.priority === 3 && passesAllItemFilters(a)) n++;
+    if (!a.done && a.today && passesAllItemFilters(a)) n++;
   }));
   return n;
 }
@@ -4259,10 +4311,10 @@ function calcStatsCompletedThisWeek() {
 
 function renderStatsStrip() {
   const total = calcStatsOpenTotal();
-  const high  = calcStatsHighPriority();
+  const today = calcStatsTodayCount();
   const done  = calcStatsCompletedThisWeek();
   return '<div class="filter-bar-stats">' +
-    '<div class="stat high"><span class="lbl">High Prio</span><span class="val">' + high + '</span></div>' +
+    '<div class="stat high"><span class="lbl">Today</span><span class="val">' + today + '</span></div>' +
     '<div class="stat"><span class="lbl">Total</span><span class="val">' + total + '</span></div>' +
     '<div class="stat good"><span class="lbl">Completed</span><span class="val">' + done + '</span></div>' +
   '</div>';
@@ -4324,7 +4376,7 @@ function renderHome() {
   const keystoneHtml = renderKeystone();
   const ok = (a) => passesAllItemFilters(a);
   const filters = getCurrentFilters();
-  const filterActive = filters.status !== null || filters.priority !== null || filters.age !== null;
+  const filterActive = filters.status !== null || filters.today === true || filters.age !== null;
 
   const groups = [];
   state.projects.forEach(p => {
@@ -4339,9 +4391,9 @@ function renderHome() {
 
   if (groups.length === 0) {
     let msg;
-    if (filters.status === "today" && filters.priority === null) {
+    if (filters.today === true && filters.status === null && filters.age === null) {
       msg = '<h2>Nothing on today</h2>' +
-            '<p>Open a project tab and set an actionable\'s status to <strong>Today</strong>.</p>';
+            '<p>Open a project tab and tap the <strong>Today</strong> pill on any task to add it here.</p>';
     } else if (filterActive) {
       msg = '<h2>Nothing matches the current filters</h2>' +
             '<p>Try clearing filters above or adjusting the status / priority selection.</p>';
@@ -4861,12 +4913,9 @@ function renderJournal() {
           '<select id="jt-status" class="jt-select">' +
             '<option value="">No status</option>' + statusOpts +
           '</select>' +
-          '<select id="jt-priority" class="jt-select">' +
-            '<option value="0">No priority</option>' +
-            '<option value="1">Low</option>' +
-            '<option value="2">Medium</option>' +
-            '<option value="3">High</option>' +
-          '</select>' +
+          '<label class="jt-today-check">' +
+            '<input type="checkbox" id="jt-today"> Today' +
+          '</label>' +
           '<button class="btn accent" id="jt-add">Add actionable</button>' +
         '</div>' +
         (journalNewProjectMode ? '' :
@@ -4974,7 +5023,7 @@ function wireJournal() {
     const newProjCancel  = container.querySelector('#jt-new-proj-cancel');
     const textInp = container.querySelector('#jt-text');
     const statSel = container.querySelector('#jt-status');
-    const prioSel = container.querySelector('#jt-priority');
+    const todayChk = container.querySelector('#jt-today');
     const addBtn  = container.querySelector('#jt-add');
 
     function fillProjects(tabId) {
@@ -5032,16 +5081,17 @@ function wireJournal() {
         if (!proj) return;
       }
 
-      // Build the actionable so status/priority apply atomically
+      // Build the actionable so status/today apply atomically
       const now = new Date().toISOString();
       const a = {
         id: uid(), text, done: false, status: null,
         blocker: "", waitingFor: "",
         createdAt: now, updatedAt: now,
-        priority: parseInt(prioSel.value, 10) || 0,
+        priority: 0,
         stuckSince: null, doneAt: null,
         parentId: null, notes: "",
-        archived: false, archivedAt: null
+        archived: false, archivedAt: null,
+        today: !!(todayChk && todayChk.checked)
       };
       const st = statSel.value || null;
       if (st && STATUSES.includes(st)) {
@@ -5282,13 +5332,18 @@ async function loadStateFromCloud() {
 
   const byProject = {};
   (actionablesRes.data || []).forEach(a => {
+    // Migrate legacy cloud rows where status was "today"
+    let st = a.status || null;
+    let todayFlag = !!a.today;
+    if (st === "today") { st = "in_progress"; todayFlag = true; }
     (byProject[a.project_id] = byProject[a.project_id] || []).push({
-      id: a.id, text: a.text || '', done: !!a.done, status: a.status || null,
+      id: a.id, text: a.text || '', done: !!a.done, status: st,
       priority: a.priority || 0, blocker: a.blocker || '', waitingFor: a.waiting_for || '',
       notes: a.notes || '',
       parentId: a.parent_id || null,
       archived: !!a.archived,
       archivedAt: a.archived_at || null,
+      today: todayFlag,
       createdAt: a.created_at, updatedAt: a.updated_at, doneAt: a.done_at, stuckSince: a.stuck_since,
       labels: []
     });
@@ -5402,6 +5457,7 @@ async function flushDirty() {
       parent_id: a.parentId || null,
       archived: !!a.archived,
       archived_at: a.archivedAt || null,
+      today: !!a.today,
       position: loc.position,
       updated_at: a.updatedAt || new Date().toISOString(),
       done_at: a.doneAt || null, stuck_since: a.stuckSince || null
@@ -5485,13 +5541,17 @@ async function maybeMigrateLocalStorage() {
   const acts = [];
   local.projects.forEach(p => {
     (p.actionables || []).forEach((a, i) => {
+      let st = a.status || null;
+      let todayFlag = !!a.today;
+      if (st === "today") { st = "in_progress"; todayFlag = true; }
       acts.push({
         id: a.id, project_id: p.id,
-        text: a.text || '', done: !!a.done, status: a.status || null,
+        text: a.text || '', done: !!a.done, status: st,
         priority: a.priority || 0,
         blocker: a.blocker || '', waiting_for: a.waitingFor || '',
         notes: a.notes || '',
         parent_id: a.parentId || null,
+        today: todayFlag,
         position: i,
         created_at: a.createdAt || new Date().toISOString(),
         updated_at: a.updatedAt || a.createdAt || new Date().toISOString(),
