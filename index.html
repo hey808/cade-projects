@@ -783,6 +783,23 @@ input.search:focus + kbd { display: none; }
 .jt-select:focus { outline: none; border-color: var(--accent); }
 .jt-select:disabled { opacity: 0.5; cursor: not-allowed; }
 .jt-row .btn.accent { margin-left: auto; padding: 9px 16px; font-size: 13px; }
+.jt-new-proj-input { min-width: 180px; }
+.jt-iconbtn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-3); font-family: inherit;
+  width: 32px; height: 32px;
+  border-radius: 6px; cursor: pointer;
+  font-size: 16px; line-height: 1;
+}
+.jt-iconbtn:hover { color: var(--text); border-color: var(--text-3); }
+.jt-link {
+  display: inline-block;
+  background: none; border: none;
+  color: var(--text-3); font-family: inherit;
+  font-size: 12px; padding: 6px 0 0;
+  cursor: pointer;
+}
+.jt-link:hover { color: var(--accent); }
 .journal-tasks-empty {
   font-size: 13px; color: var(--text-3); font-style: italic;
   padding: 14px; border: 1px dashed var(--border); border-radius: 8px;
@@ -4623,7 +4640,8 @@ const JOURNAL_QUESTIONS = [
 let journalStep = 0;           // Currently visible question (0..3)
 let journalReviewMode = false; // After Submit, show read-only review
 let journalStarted = false;    // false → show the "Let's have a good day" start screen
-let journalCreatedTaskIds = []; // ids of tasks added via the review screen this session
+let journalCreatedTaskIds = []; // ids of actionables added via the review screen this session
+let journalNewProjectMode = false; // true → show the inline "new project" form on review
 
 function getJournalEntry(date) {
   if (!state.journal[date]) state.journal[date] = { q1: "", q2: "", q3: "", q4: "" };
@@ -4633,6 +4651,7 @@ function initJournalView() {
   const entry = getJournalEntry(todayDateString());
   const filled = JOURNAL_QUESTIONS.map(q => (entry[q.key] || "").trim().length > 0);
   journalCreatedTaskIds = []; // reset the "added this visit" list
+  journalNewProjectMode = false;
   if (filled.every(Boolean)) {
     journalReviewMode = true;
     journalStarted = true;
@@ -4696,7 +4715,7 @@ function renderJournal() {
         '</div>' +
       '</div>';
     }).join("");
-    // Task creator — turn journal answers into action
+    // Actionable creator — turn journal answers into action
     const tabsHtml = state.labels.map(l =>
       '<option value="' + l.id + '">' + escapeAttr(l.name || "Unnamed") + '</option>'
     ).join("");
@@ -4716,17 +4735,24 @@ function renderJournal() {
           '</div>';
         }).join("") +
       '</div>';
+
+    // Project selector area — either dropdown or an inline new-project input
+    const projectFieldHtml = journalNewProjectMode
+      ? ('<input type="text" id="jt-new-proj-name" class="jt-select jt-new-proj-input" placeholder="New project name *">' +
+         '<button class="jt-iconbtn" id="jt-new-proj-cancel" title="Cancel">×</button>')
+      : ('<select id="jt-project" class="jt-select" disabled>' +
+         '<option value="">Project *</option>' +
+         '</select>');
+
     const creatorHtml = state.labels.length === 0 ?
-      '<div class="journal-tasks-empty">Create a tab and project first to add tasks here.</div>' :
+      '<div class="journal-tasks-empty">Create a tab first to add actionables here.</div>' :
       ('<div class="journal-task-form">' +
         '<input type="text" id="jt-text" class="jt-text-input" placeholder="What needs to happen?">' +
         '<div class="jt-row">' +
           '<select id="jt-tab" class="jt-select">' +
             '<option value="">Tab *</option>' + tabsHtml +
           '</select>' +
-          '<select id="jt-project" class="jt-select" disabled>' +
-            '<option value="">Project *</option>' +
-          '</select>' +
+          projectFieldHtml +
           '<select id="jt-status" class="jt-select">' +
             '<option value="">No status</option>' + statusOpts +
           '</select>' +
@@ -4736,8 +4762,10 @@ function renderJournal() {
             '<option value="2">Medium</option>' +
             '<option value="3">High</option>' +
           '</select>' +
-          '<button class="btn accent" id="jt-add">Add task</button>' +
+          '<button class="btn accent" id="jt-add">Add actionable</button>' +
         '</div>' +
+        (journalNewProjectMode ? '' :
+          '<button class="jt-link" id="jt-new-proj-toggle">+ Create new project in this tab</button>') +
        '</div>' + addedHtml);
 
     container.innerHTML =
@@ -4748,7 +4776,7 @@ function renderJournal() {
         '</div>' +
         entries +
         '<div class="journal-tasks">' +
-          '<h3>Create tasks for today</h3>' +
+          '<h3>Let\'s Get Started</h3>' +
           creatorHtml +
         '</div>' +
         '<div class="review-actions">' +
@@ -4776,13 +4804,13 @@ function renderJournal() {
 
   const iconHtml = JOURNAL_ICONS[q.icon] || "";
 
-  // Previous question/answer pairs — rendered grayed out above the current one
-  // so the user sees the context they've built up so far.
+  // Only the immediately previous question + answer, grayed for context,
+  // rendered below the current question's textarea.
   let priorHtml = "";
-  for (let i = 0; i < journalStep; i++) {
-    const pq = JOURNAL_QUESTIONS[i];
+  if (journalStep > 0) {
+    const pq = JOURNAL_QUESTIONS[journalStep - 1];
     const pa = (entry[pq.key] || "").trim();
-    priorHtml +=
+    priorHtml =
       '<div class="journal-prior">' +
         '<div class="prior-q">' + pq.text + '</div>' +
         '<div class="prior-a' + (pa ? "" : " empty") + '">' +
@@ -4793,10 +4821,10 @@ function renderJournal() {
 
   container.innerHTML =
     '<div class="journal-card">' +
-      priorHtml +
       '<div class="question-icon">' + iconHtml + '</div>' +
       '<div class="question">' + q.text + '</div>' +
       '<textarea id="journal-textarea" placeholder="Write…">' + escapeAttr(value) + '</textarea>' +
+      priorHtml +
       '<div class="journal-nav">' +
         '<button class="nav-btn" id="journal-prev"' + prevDisabled + '>← Previous</button>' +
         '<div class="journal-stepper">' + steps + '</div>' +
@@ -4833,13 +4861,17 @@ function wireJournal() {
       journalStep = 0;
       renderJournal();
     });
-    // Task creator on the review screen — wire its inputs + Add button
+    // Actionable creator on the review screen — wire inputs + Add button
     const tabSel  = container.querySelector('#jt-tab');
     const projSel = container.querySelector('#jt-project');
+    const newProjInp     = container.querySelector('#jt-new-proj-name');
+    const newProjToggle  = container.querySelector('#jt-new-proj-toggle');
+    const newProjCancel  = container.querySelector('#jt-new-proj-cancel');
     const textInp = container.querySelector('#jt-text');
     const statSel = container.querySelector('#jt-status');
     const prioSel = container.querySelector('#jt-priority');
     const addBtn  = container.querySelector('#jt-add');
+
     function fillProjects(tabId) {
       if (!projSel) return;
       if (!tabId) {
@@ -4851,19 +4883,51 @@ function wireJournal() {
       projSel.innerHTML = '<option value="">Project *</option>' +
         projs.map(p => '<option value="' + p.id + '">' +
           escapeAttr(p.name || "(untitled)") + '</option>').join("");
-      projSel.disabled = projs.length === 0;
+      projSel.disabled = false;
     }
     if (tabSel) tabSel.addEventListener("change", () => fillProjects(tabSel.value));
+
+    // "+ Create new project" — swap the project dropdown for a name input
+    if (newProjToggle) newProjToggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      journalNewProjectMode = true;
+      renderJournal();
+      setTimeout(() => {
+        const i = document.getElementById("jt-new-proj-name");
+        if (i) i.focus();
+      }, 0);
+    });
+    if (newProjCancel) newProjCancel.addEventListener("click", (e) => {
+      e.preventDefault();
+      journalNewProjectMode = false;
+      renderJournal();
+    });
+
     if (addBtn) addBtn.addEventListener("click", () => {
-      const text   = (textInp.value || "").trim();
-      const tabId  = tabSel.value;
-      const projId = projSel.value;
-      if (!text)   { textInp.focus(); return; }
-      if (!tabId)  { tabSel.focus();  return; }
-      if (!projId) { projSel.focus(); return; }
-      const proj = findProject(projId);
-      if (!proj) return;
-      // Build the actionable manually so we can apply status/priority atomically
+      const text  = (textInp.value || "").trim();
+      const tabId = tabSel.value;
+      if (!text)  { textInp.focus(); return; }
+      if (!tabId) { tabSel.focus();  return; }
+
+      // Resolve the target project — either pick existing or create-on-the-fly
+      let proj;
+      if (journalNewProjectMode) {
+        const name = (newProjInp.value || "").trim();
+        if (!name) { newProjInp.focus(); return; }
+        const now = new Date().toISOString();
+        proj = { id: uid(), name, goal: "", labelId: tabId, actionables: [], createdAt: now };
+        state.projects.unshift(proj);
+        markProjectDirty(proj.id);
+        // Other projects shifted down — sync their positions
+        markAllProjectsDirty();
+      } else {
+        const projId = projSel.value;
+        if (!projId) { projSel.focus(); return; }
+        proj = findProject(projId);
+        if (!proj) return;
+      }
+
+      // Build the actionable so status/priority apply atomically
       const now = new Date().toISOString();
       const a = {
         id: uid(), text, done: false, status: null,
@@ -4883,10 +4947,9 @@ function wireJournal() {
       markActionDirty(a.id);
       saveState();
       journalCreatedTaskIds.unshift({ projId: proj.id, itemId: a.id });
-      // Clear inputs and re-render to update the "added today" list
-      textInp.value = "";
-      statSel.value = "";
-      prioSel.value = "0";
+
+      // Reset inputs (close new-project mode after creating) and re-render
+      journalNewProjectMode = false;
       renderJournal();
       setTimeout(() => {
         const ta = document.getElementById("jt-text");
