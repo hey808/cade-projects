@@ -158,6 +158,9 @@ body.professional-mode .meta-badge.level-bad { color: var(--text-2); background:
   color: var(--text);
   box-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
+.wd-duration-row { display: flex; align-items: center; gap: 10px; }
+.wd-duration-input { width: 80px; }
+.wd-duration-unit { font-size: 13px; color: var(--text-3); }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: var(--font-sans);
@@ -2223,6 +2226,7 @@ if (state.layout.lightMode === true && !state.layout.theme) state.layout.theme =
 delete state.layout.lightMode;
 delete state.layout.warmMode;
 if (!["cool", "light", "professional"].includes(state.layout.theme)) state.layout.theme = "cool";
+if (typeof state.layout.deepWorkMin !== "number" || state.layout.deepWorkMin < 1) state.layout.deepWorkMin = 75;
 if (typeof state.layout.projectSplit !== "number") state.layout.projectSplit = 30;
 state.layout.projectSplit = Math.max(15, Math.min(70, state.layout.projectSplit));
 // Apply it now so first paint reflects the saved width + theme
@@ -3280,10 +3284,11 @@ function renderHeaderDeep() {
 
 function startDeepWork() {
   unlockAudioCtx(); // user gesture — primes audio for the future chime
+  const mins = (state.layout && state.layout.deepWorkMin) || 75;
   state.deepWork = {
     active: true,
     startedAt: Date.now(),
-    durationMs: 75 * 60 * 1000
+    durationMs: mins * 60 * 1000
   };
   saveState();
   renderWindDown();
@@ -3431,7 +3436,7 @@ function renderWindDown() {
         '<div class="wd-circle">' + dwCircle + '</div>' +
         '<div class="wd-text">' +
           '<div class="wd-label">Deep Work</div>' +
-          '<div class="wd-target">75-minute focus · gentle chime when done</div>' +
+          '<div class="wd-target">' + Math.round(state.deepWork.durationMs / 60000) + '-minute focus · gentle chime when done</div>' +
           '<div class="wd-time">' + formatCountdown(remaining) + '</div>' +
         '</div>' +
       '</div>';
@@ -3508,6 +3513,14 @@ function renderWindDownModal() {
           '</div>' +
         '</div>' +
 
+        '<div class="settings-section">' +
+          '<div class="wd-title">Deep work duration</div>' +
+          '<div class="wd-duration-row">' +
+            '<input type="number" min="1" max="240" class="wd-time-input wd-duration-input" id="wd-deep-min" ' +
+              'value="' + ((state.layout && state.layout.deepWorkMin) || 75) + '">' +
+            '<span class="wd-duration-unit">minutes</span>' +
+          '</div>' +
+        '</div>' +
         '<div class="settings-section">' +
           '<div class="wd-title">Day starts</div>' +
           '<input type="time" class="wd-time-input" id="wd-start-input" ' +
@@ -3608,6 +3621,21 @@ function wireWindDown() {
     });
     inp.addEventListener("click", (e) => e.stopPropagation());
     inp.addEventListener("mousedown", (e) => e.stopPropagation());
+  }
+  const deepMinInp = document.getElementById("wd-deep-min");
+  if (deepMinInp && !deepMinInp.dataset.wired) {
+    deepMinInp.dataset.wired = "1";
+    deepMinInp.addEventListener("change", () => {
+      let v = parseInt(deepMinInp.value, 10);
+      if (isNaN(v) || v < 1) v = 75;
+      if (v > 240) v = 240;
+      state.layout = state.layout || {};
+      state.layout.deepWorkMin = v;
+      deepMinInp.value = v;
+      saveState();
+    });
+    deepMinInp.addEventListener("click", (e) => e.stopPropagation());
+    deepMinInp.addEventListener("mousedown", (e) => e.stopPropagation());
   }
   const startInp = document.getElementById("wd-start-input");
   if (startInp && !startInp.dataset.wired) {
@@ -3941,7 +3969,7 @@ function renderProject(p) {
         '<div class="proj-name" contenteditable="true" data-placeholder="Project name" spellcheck="false">' +
           escapeAttr(p.name) +
         '</div>' +
-        '<div class="proj-meta">Actionables<span class="count">' + active.length + ' open</span></div>' +
+        '<div class="proj-meta"><span class="count">' + active.length + ' open</span></div>' +
       '</div>' +
       '<div class="proj-divider" data-proj-divider title="Drag to resize"></div>' +
       '<div class="proj-body">' +
@@ -4663,10 +4691,13 @@ function renderHomeItem(p, a, depth) {
           'placeholder="What\'s in the way?" value="' + escapeAttr(a.blocker || "") + '">' +
       '</div>';
   }
+  const todayBtn = '<button class="today-toggle' + (a.today ? " on" : "") + '" ' +
+    'data-action="home-toggle-today" title="Toggle today">TODAY</button>';
   return (
     '<div class="today-item' + (a.done ? " done" : "") + '" data-depth="' + depth + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
       '<input type="checkbox" data-action="home-toggle"' + (a.done ? " checked" : "") + '>' +
       '<div class="text">' + escapeAttr(a.text || "(untitled)") + '</div>' +
+      todayBtn +
       '<div class="status-wrap">' + statusChipHtml + statusPickerHtml + '</div>' +
       '<div class="proj-tag" data-action="jump-to-project">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
       contextRow +
@@ -4681,6 +4712,15 @@ function wireHomeView() {
       const wrap = cb.closest('.today-item');
       updateActionable(wrap.dataset.projectId, wrap.dataset.itemId, "done", cb.checked);
       renderAll();
+    });
+  });
+  // Today pill → toggle today flag
+  container.querySelectorAll('[data-action="home-toggle-today"]').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wrap = btn.closest('.today-item');
+      if (!wrap) return;
+      toggleTodayFlag(wrap.dataset.projectId, wrap.dataset.itemId);
     });
   });
   // Status chip → toggle picker
