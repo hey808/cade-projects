@@ -227,21 +227,33 @@ input.search::placeholder { color: var(--text-4); }
 }
 input.search:focus + kbd { display: none; }
 
-/* Wind-down hero section (its own block above the date dashboard) */
+/* Hero row: wind-down + daily-dashboard side by side */
+.hero-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+  align-items: stretch;
+}
+@media (max-width: 900px) {
+  .hero-row { grid-template-columns: 1fr; }
+}
+
+/* Wind-down hero section (left half of the hero row) */
 .wind-down {
   position: relative;
   background: linear-gradient(135deg, rgba(255,107,71,0.14), rgba(255,107,71,0.02));
   border: 1px solid rgba(255, 107, 71, 0.35);
-  border-radius: 14px;
-  padding: 18px 24px;
-  margin-bottom: 14px;
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 18px;
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 6px;
   cursor: pointer; user-select: none;
   transition: border-color 0.15s, background 0.15s;
+  min-height: 100%;
 }
 .wind-down:hover { border-color: rgba(255, 107, 71, 0.55); }
-.wind-down .wd-left { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.wind-down .wd-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .wind-down .wd-label {
   color: var(--accent);
   text-transform: uppercase; letter-spacing: 0.10em;
@@ -253,14 +265,14 @@ input.search:focus + kbd { display: none; }
 }
 .wind-down .wd-time {
   color: var(--text);
-  font-family: var(--font-serif);
-  font-weight: 600;
-  font-variation-settings: "opsz" 72;
-  font-size: 44px;
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-size: 34px;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  margin-top: 2px;
 }
 .wind-down.urgent {
   background: linear-gradient(135deg, rgba(220, 38, 38, 0.18), rgba(220, 38, 38, 0.04));
@@ -273,11 +285,7 @@ input.search:focus + kbd { display: none; }
   border-color: rgba(34, 197, 94, 0.35);
 }
 .wind-down.done .wd-label { color: var(--good); }
-.wind-down.done .wd-time  { color: var(--good); font-size: 24px; font-family: var(--font-sans); font-weight: 600; }
-@media (max-width: 540px) {
-  .wind-down { flex-direction: column; align-items: flex-start; padding: 14px 16px; }
-  .wind-down .wd-time { font-size: 36px; }
-}
+.wind-down.done .wd-time  { color: var(--good); font-size: 22px; font-family: var(--font-sans); font-weight: 600; }
 
 .wind-down-popover {
   position: absolute; top: calc(100% + 6px); right: 0;
@@ -313,13 +321,14 @@ input.search:focus + kbd { display: none; }
 }
 .wind-down-popover .wd-trigger:hover { color: var(--accent); border-color: var(--accent); }
 
-/* Daily progress dashboard — compact two-row layout */
+/* Daily progress dashboard — compact, right half of the hero row */
 .daily-dashboard {
   background: linear-gradient(135deg, #2e2925 0%, #1c1c1e 100%);
   border: 1px solid rgba(255, 107, 71, 0.28);
   border-radius: 12px;
-  padding: 12px 18px;
-  margin-bottom: 14px;
+  padding: 14px 18px;
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 10px;
 }
 .dd-progress-row {
   display: flex; align-items: center; gap: 12px;
@@ -1218,18 +1227,19 @@ ul.items li:hover .row-tool { opacity: 1; }
   <button class="btn accent" id="new-project">+ New project</button>
 </header>
 
-<div id="wind-down-wrap"></div>
-
-<div class="daily-dashboard" id="daily-dashboard">
-  <div class="dd-progress-row">
-    <div class="dd-progress-bar"><div id="dd-progress-fill" style="width:0%"></div></div>
-    <div class="dd-progress-label" id="dd-progress-label">—</div>
-  </div>
-  <div class="dd-bottom">
-    <div class="dd-date" id="dd-date-text"></div>
-    <div class="dd-bottom-sep">·</div>
-    <div class="dd-quick" id="dd-quick"></div>
-    <div class="dd-stats" id="dd-stats"></div>
+<div class="hero-row">
+  <div id="wind-down-wrap"></div>
+  <div class="daily-dashboard" id="daily-dashboard">
+    <div class="dd-progress-row">
+      <div class="dd-progress-bar"><div id="dd-progress-fill" style="width:0%"></div></div>
+      <div class="dd-progress-label" id="dd-progress-label">—</div>
+    </div>
+    <div class="dd-bottom">
+      <div class="dd-date" id="dd-date-text"></div>
+      <div class="dd-bottom-sep">·</div>
+      <div class="dd-quick" id="dd-quick"></div>
+      <div class="dd-stats" id="dd-stats"></div>
+    </div>
   </div>
 </div>
 
