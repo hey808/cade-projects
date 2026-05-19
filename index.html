@@ -287,6 +287,40 @@ input.search:focus + kbd { display: none; }
 .wind-down.done .wd-label { color: var(--good); }
 .wind-down.done .wd-time  { color: var(--good); font-size: 22px; font-family: var(--font-sans); font-weight: 600; }
 
+/* Deep Work mode — replaces the wind-down card while a focus session runs */
+.wind-down.deep {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(59, 130, 246, 0.02));
+  border-color: rgba(59, 130, 246, 0.45);
+  cursor: default;
+}
+.wind-down.deep .wd-label { color: var(--waiting); }
+.wind-down.deep .wd-time  { color: var(--waiting); }
+.wind-down.deep:hover { border-color: rgba(59, 130, 246, 0.60); }
+
+.deep-corner-btn {
+  position: absolute; top: 10px; right: 12px;
+  background: transparent;
+  border: 1px solid rgba(255,107,71,0.32);
+  color: var(--accent);
+  padding: 4px 10px; border-radius: 5px;
+  font-family: inherit; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  cursor: pointer;
+}
+.deep-corner-btn:hover {
+  background: rgba(255,107,71,0.12);
+  border-color: rgba(255,107,71,0.55);
+}
+.deep-corner-btn.end {
+  border-color: rgba(255,255,255,0.18);
+  color: var(--text-3);
+}
+.deep-corner-btn.end:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+  border-color: var(--text-3);
+}
+
 .wind-down-popover {
   position: absolute; top: calc(100% + 6px); right: 0;
   background: var(--card); border: 1px solid var(--border-strong);
@@ -1236,8 +1270,6 @@ ul.items li:hover .row-tool { opacity: 1; }
     </div>
     <div class="dd-bottom">
       <div class="dd-date" id="dd-date-text"></div>
-      <div class="dd-bottom-sep">·</div>
-      <div class="dd-quick" id="dd-quick"></div>
       <div class="dd-stats" id="dd-stats"></div>
     </div>
   </div>
@@ -1300,6 +1332,17 @@ state.windDown = state.windDown || { hour: 20, minute: 0, lastTriggeredDate: nul
 // Backfill in case stored state is older
 if (typeof state.windDown.hour   !== "number") state.windDown.hour = 20;
 if (typeof state.windDown.minute !== "number") state.windDown.minute = 0;
+
+// Deep Work session — transient timer that overrides the wind-down card
+state.deepWork = state.deepWork || { active: false, startedAt: null, durationMs: 75 * 60 * 1000 };
+if (state.deepWork.active && state.deepWork.startedAt) {
+  // Reloading mid-session — if the timer has already elapsed, end the session
+  // (we can't play the chime without a fresh user gesture, but state is clean).
+  if (Date.now() - state.deepWork.startedAt >= state.deepWork.durationMs) {
+    state.deepWork.active = false;
+    state.deepWork.startedAt = null;
+  }
+}
 // Migrate older flat-shape filters (status/priority/statuses/labelIds at top level)
 // to the new per-view map. The old global filter is discarded — each view now
 // keeps its own filter selection, with "home" lazily defaulting to status="today".
@@ -2018,6 +2061,76 @@ function wireTabs() {
   });
 }
 
+// ─── Deep Work session ────────────────────────────────
+// Click "Start deep work" to begin a 75-minute focus timer. While active,
+// the wind-down card is replaced with a focus countdown. On completion,
+// a gentle Web Audio chime plays.
+let _slateAudioCtx = null;
+function unlockAudioCtx() {
+  // Must run inside a user gesture for browsers to allow playback.
+  if (!_slateAudioCtx) {
+    try {
+      _slateAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) { return null; }
+  }
+  if (_slateAudioCtx.state === "suspended") {
+    try { _slateAudioCtx.resume(); } catch (e) {}
+  }
+  return _slateAudioCtx;
+}
+function playPeacefulChime() {
+  const ctx = _slateAudioCtx || (function () {
+    try { return new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (e) { return null; }
+  })();
+  if (!ctx) return;
+  if (ctx.state === "suspended") { try { ctx.resume(); } catch (e) {} }
+  const start = ctx.currentTime + 0.05;
+  // Three spaced bell strikes — fundamental + perfect fifth + octave
+  const tones = [
+    { freq: 528,  gain: 0.30, decay: 5.0 },
+    { freq: 792,  gain: 0.16, decay: 4.0 },
+    { freq: 1056, gain: 0.10, decay: 3.5 }
+  ];
+  for (let strike = 0; strike < 3; strike++) {
+    const t0 = start + strike * 1.7;
+    tones.forEach(t => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = t.freq;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(t.gain, t0 + 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + t.decay);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + t.decay + 0.1);
+    });
+  }
+}
+function deepWorkRemainingMs() {
+  if (!state.deepWork || !state.deepWork.active || !state.deepWork.startedAt) return 0;
+  return state.deepWork.durationMs - (Date.now() - state.deepWork.startedAt);
+}
+function startDeepWork() {
+  unlockAudioCtx(); // user gesture — primes audio for the future chime
+  state.deepWork = {
+    active: true,
+    startedAt: Date.now(),
+    durationMs: 75 * 60 * 1000
+  };
+  saveState();
+  renderWindDown();
+}
+function endDeepWork(opts) {
+  const playChime = opts && opts.playChime;
+  state.deepWork = { active: false, startedAt: null, durationMs: 75 * 60 * 1000 };
+  saveState();
+  if (playChime) playPeacefulChime();
+  renderWindDown();
+}
+
 // ─── Wind-down countdown ──────────────────────────────
 // Counts down to a user-set time (default 8pm local). When it hits zero,
 // every open "today"-status task has its status cleared so the next day
@@ -2051,6 +2164,27 @@ function formatTargetLabel() {
 function renderWindDown() {
   const wrap = document.getElementById("wind-down-wrap");
   if (!wrap) return;
+
+  // ── Deep Work mode overrides the wind-down card ──
+  if (state.deepWork && state.deepWork.active) {
+    const remaining = deepWorkRemainingMs();
+    if (remaining <= 0) {
+      endDeepWork({ playChime: true });
+      return;
+    }
+    wrap.innerHTML =
+      '<div class="wind-down deep" id="wind-down-btn">' +
+        '<button class="deep-corner-btn end" id="deep-end-btn" title="End focus session">End</button>' +
+        '<div class="wd-left">' +
+          '<div class="wd-label">Deep Work</div>' +
+          '<div class="wd-target">75-minute focus · gentle chime when done</div>' +
+        '</div>' +
+        '<div class="wd-time">' + formatCountdown(remaining) + '</div>' +
+      '</div>';
+    wireWindDown();
+    return;
+  }
+
   const today = todayDateString();
   const triggeredToday = state.windDown.lastTriggeredDate === today;
   const popover = activeWindDownEditor ? (
@@ -2064,9 +2198,12 @@ function renderWindDown() {
     '</div>'
   ) : "";
 
+  const startBtn = '<button class="deep-corner-btn" id="deep-start-btn" title="Start a 75-minute focus session">Start deep work</button>';
+
   if (triggeredToday) {
     wrap.innerHTML =
       '<div class="wind-down done" id="wind-down-btn" title="Wound down for today">' +
+        startBtn +
         '<div class="wd-left">' +
           '<div class="wd-label">Wind-down complete</div>' +
           '<div class="wd-target">Triggered at ' + formatTargetLabel() + ' · click to adjust</div>' +
@@ -2083,6 +2220,7 @@ function renderWindDown() {
   wrap.innerHTML =
     '<div class="wind-down' + (urgent ? " urgent" : "") + '" id="wind-down-btn" ' +
       'title="Click to adjust">' +
+      startBtn +
       '<div class="wd-left">' +
         '<div class="wd-label">Time Until Wind-Down</div>' +
         '<div class="wd-target">at ' + formatTargetLabel() + ' · click to adjust</div>' +
@@ -2097,8 +2235,12 @@ function wireWindDown() {
   if (btn && !btn.dataset.wired) {
     btn.dataset.wired = "1";
     btn.addEventListener("click", (e) => {
-      // If the click landed inside the popover, ignore.
+      // Skip if click is inside the popover, deep-work controls, or while a
+      // focus session is active.
       if (e.target.closest("#wind-down-popover")) return;
+      if (e.target.closest("#deep-start-btn")) return;
+      if (e.target.closest("#deep-end-btn")) return;
+      if (state.deepWork && state.deepWork.active) return;
       e.stopPropagation();
       activeWindDownEditor = !activeWindDownEditor;
       renderWindDown();
@@ -2108,6 +2250,23 @@ function wireWindDown() {
           if (inp) inp.focus();
         }, 0);
       }
+    });
+  }
+
+  const startBtn = document.getElementById("deep-start-btn");
+  if (startBtn && !startBtn.dataset.wired) {
+    startBtn.dataset.wired = "1";
+    startBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startDeepWork();
+    });
+  }
+  const endBtn = document.getElementById("deep-end-btn");
+  if (endBtn && !endBtn.dataset.wired) {
+    endBtn.dataset.wired = "1";
+    endBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (confirm("End this focus session early?")) endDeepWork({ playChime: false });
     });
   }
   const inp = document.getElementById("wd-time-input");
@@ -2174,6 +2333,15 @@ function triggerWindDown(manual) {
 }
 
 function tickWindDown() {
+  // Deep Work mode wins — drive its countdown and fire the chime on zero.
+  if (state.deepWork && state.deepWork.active) {
+    if (deepWorkRemainingMs() <= 0) {
+      endDeepWork({ playChime: true });
+      return;
+    }
+    renderWindDown();
+    return;
+  }
   if (!state.windDown) return;
   // Trigger check runs every tick regardless of editor state
   const today = todayDateString();
@@ -2233,12 +2401,6 @@ function renderDailyDashboard() {
     todayDone + " / " + todayTotal + "  ·  " + pct + "%";
   document.getElementById("dd-stats").innerHTML =
     "<strong>" + state.projects.length + "</strong> project" + (state.projects.length === 1 ? "" : "s");
-
-  document.getElementById("dd-quick").innerHTML =
-    '<span><strong>' + openTotal + '</strong> open</span>' +
-    '<span class="pill-stuck"><strong>' + stuck + '</strong> stuck</span>' +
-    '<span class="pill-waiting"><strong>' + waiting + '</strong> waiting</span>' +
-    '<span class="pill-backburner"><strong>' + backburner + '</strong> backburner</span>';
 }
 
 // ─── Filter bar ────────────────────────────────────────
@@ -3500,7 +3662,8 @@ async function bootstrap() {
       state = {
         projects: [], labels: [], filters: {},
         keystone: { date: null, text: "", done: false },
-        windDown: { hour: 20, minute: 0, lastTriggeredDate: null }
+        windDown: { hour: 20, minute: 0, lastTriggeredDate: null },
+        deepWork: { active: false, startedAt: null, durationMs: 75 * 60 * 1000 }
       };
       showAuthScreen();
     }
