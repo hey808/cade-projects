@@ -435,6 +435,13 @@ input.search:focus + kbd { display: none; }
 }
 .journal-nav .nav-btn.primary:hover { background: #ff7a59; }
 
+/* Hide the daily-dashboard / wind-down / filter bar / page header when
+   the journal tab is open — keeps the focus on just the writing. */
+body.journal-mode header,
+body.journal-mode .hero-row,
+body.journal-mode .filter-bar { display: none !important; }
+body.journal-mode #journal-view { padding-top: 20px; }
+
 /* Journal review (read-only summary shown after submit) */
 .journal-review {
   max-width: 720px; margin: 0 auto;
@@ -1996,6 +2003,7 @@ function setView(view) {
   document.getElementById('journal-view').style.display  = view === 'journal' ? 'block' : 'none';
   document.getElementById('home-view').style.display     = view === 'home'    ? 'block' : 'none';
   document.getElementById('projects-view').style.display = (view !== 'home' && view !== 'journal') ? 'block' : 'none';
+  document.body.classList.toggle('journal-mode', view === 'journal');
   renderAll();
 }
 
@@ -3645,6 +3653,7 @@ function renderAll() {
   document.getElementById('journal-view').style.display  = currentView === 'journal' ? 'block' : 'none';
   document.getElementById('home-view').style.display     = currentView === 'home'    ? 'block' : 'none';
   document.getElementById('projects-view').style.display = (currentView !== 'home' && currentView !== 'journal') ? 'block' : 'none';
+  document.body.classList.toggle('journal-mode', currentView === 'journal');
   if (currentView === "journal")   renderJournal();
   else if (currentView === "home") renderHome();
   else                              renderProjects();
