@@ -435,6 +435,60 @@ input.search:focus + kbd { display: none; }
 }
 .journal-nav .nav-btn.primary:hover { background: #ff7a59; }
 
+/* ── Cream "paper" mode for the Morning Journal tab ────────────────
+   When body has .journal-mode, we hide the daily-dashboard/wind-down hero
+   row, the filter bar, and the top header — and switch the right-hand
+   pane to a warm cream theme so the journal feels like a notebook. */
+body.journal-mode header,
+body.journal-mode .hero-row,
+body.journal-mode .filter-bar { display: none !important; }
+
+body.journal-mode main {
+  background: #f3e7c8;
+  color: #2a2218;
+  transition: background 0.2s;
+}
+body.journal-mode #journal-view {
+  padding-top: 48px;
+  padding-bottom: 56px;
+}
+body.journal-mode .journal-card .question {
+  color: #2a2218;
+}
+body.journal-mode .journal-card textarea {
+  background: #efe1bc;
+  border: 1px solid #d8c89e;
+  color: #2a2218;
+}
+body.journal-mode .journal-card textarea:focus {
+  border-color: var(--accent);
+  background: #efe2c0;
+}
+body.journal-mode .journal-card textarea::placeholder {
+  color: #a8946a;
+}
+body.journal-mode .journal-stepper .step {
+  border-color: #b9a47a;
+}
+body.journal-mode .journal-stepper .step:hover { border-color: #7a6948; }
+body.journal-mode .journal-stepper .step.active,
+body.journal-mode .journal-stepper .step.filled {
+  background: var(--accent); border-color: var(--accent);
+}
+body.journal-mode .journal-nav .nav-btn {
+  border-color: #b9a47a;
+  color: #5a4a30;
+}
+body.journal-mode .journal-nav .nav-btn:hover:not(:disabled) {
+  border-color: #7a6948;
+  color: #2a2218;
+}
+body.journal-mode .journal-nav .nav-btn.primary {
+  background: var(--accent); color: #0a0a0a;
+  border-color: var(--accent);
+}
+body.journal-mode .journal-nav .nav-btn.primary:hover { background: #ff7a59; }
+
 .wind-down-popover {
   position: absolute; top: calc(100% + 6px); right: 0;
   background: var(--card); border: 1px solid var(--border-strong);
@@ -1944,6 +1998,7 @@ function setView(view) {
   document.getElementById('journal-view').style.display  = view === 'journal' ? 'block' : 'none';
   document.getElementById('home-view').style.display     = view === 'home'    ? 'block' : 'none';
   document.getElementById('projects-view').style.display = (view !== 'home' && view !== 'journal') ? 'block' : 'none';
+  document.body.classList.toggle('journal-mode', view === 'journal');
   renderAll();
 }
 
@@ -3538,6 +3593,7 @@ function renderAll() {
   document.getElementById('journal-view').style.display  = currentView === 'journal' ? 'block' : 'none';
   document.getElementById('home-view').style.display     = currentView === 'home'    ? 'block' : 'none';
   document.getElementById('projects-view').style.display = (currentView !== 'home' && currentView !== 'journal') ? 'block' : 'none';
+  document.body.classList.toggle('journal-mode', currentView === 'journal');
   if (currentView === "journal")   renderJournal();
   else if (currentView === "home") renderHome();
   else                              renderProjects();
