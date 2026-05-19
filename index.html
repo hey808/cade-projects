@@ -737,6 +737,41 @@ ul.items .li-rm {
 ul.items li:hover .li-rm { opacity: 1; }
 ul.items .li-rm:hover { color: var(--bad); }
 
+/* Notes chevron + Google Calendar button (row-level utilities) */
+.row-tool {
+  background: none; border: none;
+  color: var(--text-4); cursor: pointer;
+  padding: 2px 5px; border-radius: 4px;
+  line-height: 0;
+  opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+ul.items li:hover .row-tool { opacity: 1; }
+.row-tool:hover { color: var(--text); background: var(--card-hover); }
+.row-tool.has-content { opacity: 1; color: var(--text-2); }
+.row-tool.expanded { color: var(--accent); }
+.row-tool svg { width: 13px; height: 13px; stroke: currentColor; }
+
+/* Notes panel (collapsible body under the row) */
+.notes-panel {
+  margin-top: 6px; margin-left: 35px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.notes-panel textarea {
+  width: 100%;
+  background: transparent; border: none;
+  color: var(--text); font-family: inherit;
+  font-size: 12px; line-height: 1.55;
+  resize: vertical; min-height: 56px;
+  padding: 0;
+}
+.notes-panel textarea:focus { outline: none; }
+.notes-panel textarea::placeholder { color: var(--text-4); font-style: italic; }
+
 /* Context rows under stuck/waiting */
 .context-row {
   margin-top: 6px; margin-left: 35px;
@@ -1171,6 +1206,7 @@ state.projects.forEach(p => {
     }
     if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
     if (a.parentId === undefined) a.parentId = null;
+    if (typeof a.notes !== "string") a.notes = "";
     delete a.labels;
     delete a.blockedBy;
     delete a.dueDate;
@@ -1188,8 +1224,16 @@ window.localStorage.setItem("view", currentView);
 let activeStatusPicker = null; // "<projId>:<itemId>" or null
 let searchTerm = "";
 let expandedDone = new Set();
+let expandedNotes = new Set(); // actionable IDs whose notes panel is open
 
-const ARCHIVE_AFTER_MS = 24 * 60 * 60 * 1000;
+// Completed tasks roll into the "archived" footer at local midnight each day.
+// Anything done since 00:00 today still renders inline in the active list;
+// older completions hide behind the "Show N completed" footer.
+function archiveCutoffMs() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
 
 function uid() { return Math.random().toString(36).slice(2,10); }
 function escapeAttr(s) {
@@ -1408,7 +1452,7 @@ function addActionable(projId) {
     blocker: "", waitingFor: "",
     createdAt: now, updatedAt: now,
     priority: 0, stuckSince: null, doneAt: null,
-    parentId: null
+    parentId: null, notes: ""
   };
   p.actionables.push(a);
   markActionDirty(a.id);
@@ -2016,17 +2060,17 @@ function renderProject(p) {
   const colorAttrs = l ? 'data-label-color="' + l.color + '" style="--proj-color:' + l.color + ';"' : '';
 
   const filterActive = isItemFilterActive();
+  const cutoff = archiveCutoffMs();
   const active = [];
   const recentDone = [];
   const archived = [];
   p.actionables.forEach(a => {
     if (filterActive && !passesAllItemFilters(a)) return;
-    if (!a.done) active.push(a);
-    else {
-      const age = a.doneAt ? (Date.now() - new Date(a.doneAt).getTime()) : ARCHIVE_AFTER_MS + 1;
-      if (age < ARCHIVE_AFTER_MS) recentDone.push(a);
-      else archived.push(a);
-    }
+    if (!a.done) { active.push(a); return; }
+    // Completed today → still inline. Completed before today → into archive footer.
+    const doneMs = a.doneAt ? new Date(a.doneAt).getTime() : 0;
+    if (doneMs >= cutoff) recentDone.push(a);
+    else archived.push(a);
   });
   const showArchived = expandedDone.has(p.id);
   let visible = active.concat(recentDone).concat(showArchived ? archived : []);
@@ -2131,6 +2175,41 @@ function renderActionable(p, a, depth) {
       '</div>';
   }
 
+  // Google Calendar prefill — opens calendar.google.com with a templated event
+  const gcalHref = gcalUrl(a);
+  const gcalBtn =
+    '<a class="row-tool" href="' + escapeAttr(gcalHref) + '" target="_blank" rel="noopener" ' +
+      'data-action="open-gcal" title="Add to Google Calendar">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect x="3" y="4" width="18" height="18" rx="2"/>' +
+        '<line x1="16" y1="2" x2="16" y2="6"/>' +
+        '<line x1="8" y1="2" x2="8" y2="6"/>' +
+        '<line x1="3" y1="10" x2="21" y2="10"/>' +
+      '</svg>' +
+    '</a>';
+
+  // Notes toggle — chevron caret. Highlights when notes exist or panel is open.
+  const notesOpen = expandedNotes.has(a.id);
+  const hasNotes = !!(a.notes && a.notes.trim().length);
+  const notesClass = "row-tool" + (notesOpen ? " expanded" : (hasNotes ? " has-content" : ""));
+  const notesBtn =
+    '<button class="' + notesClass + '" data-action="toggle-notes" ' +
+      'title="' + (hasNotes ? "Notes" : "Add notes") + '">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<line x1="4" y1="7" x2="20" y2="7"/>' +
+        '<line x1="4" y1="12" x2="20" y2="12"/>' +
+        '<line x1="4" y1="17" x2="14" y2="17"/>' +
+      '</svg>' +
+    '</button>';
+
+  const notesPanel = notesOpen
+    ? '<div class="notes-panel">' +
+        '<textarea data-action="update-notes" placeholder="Notes, context, links…">' +
+          escapeAttr(a.notes || "") +
+        '</textarea>' +
+      '</div>'
+    : "";
+
   return (
     '<li data-item-id="' + a.id + '" data-depth="' + depth + '" class="' + (a.done ? "done" : "") + '">' +
       '<div class="item-row">' +
@@ -2144,11 +2223,31 @@ function renderActionable(p, a, depth) {
           renderStatusChip(p, a) +
           renderStatusPicker(p, a) +
         '</div>' +
+        gcalBtn +
+        notesBtn +
         '<button class="li-rm" data-action="remove-actionable" title="Remove">×</button>' +
       '</div>' +
       contextRow +
+      notesPanel +
     '</li>'
   );
+}
+
+// Google Calendar template URL with title + details prefilled.
+// We don't pass `dates` so the user picks the time on Google's side.
+function gcalUrl(a) {
+  const title = (a.text && a.text.trim()) || 'Untitled task';
+  const detailParts = [];
+  if (a.notes && a.notes.trim()) detailParts.push(a.notes.trim());
+  if (a.blocker)    detailParts.push('Blocker: ' + a.blocker);
+  if (a.waitingFor) detailParts.push('Waiting for: ' + a.waitingFor);
+  detailParts.push('— from Slate');
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    details: detailParts.join('\n\n')
+  });
+  return 'https://calendar.google.com/calendar/render?' + params.toString();
 }
 
 // ─── Wire project events ───────────────────────────────
@@ -2185,6 +2284,19 @@ function wireProjects() {
         activeStatusPicker = null;
         // setActionableStatus calls renderAll
       }
+      else if (action === "toggle-notes") {
+        if (expandedNotes.has(itemId)) expandedNotes.delete(itemId);
+        else expandedNotes.add(itemId);
+        renderProjects();
+        // Auto-focus the textarea when newly opened
+        if (expandedNotes.has(itemId)) {
+          setTimeout(() => {
+            const ta = document.querySelector('[data-item-id="' + itemId + '"] textarea[data-action="update-notes"]');
+            if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+          }, 0);
+        }
+      }
+      // open-gcal: anchor tag opens the URL natively; nothing to do here.
     });
   });
 
@@ -2238,6 +2350,15 @@ function wireProjects() {
       const item = inp.closest('[data-item-id]');
       if (!proj || !item) return;
       updateActionable(proj.dataset.projectId, item.dataset.itemId, "waitingFor", inp.value);
+    });
+  });
+
+  container.querySelectorAll('textarea[data-action="update-notes"]').forEach(ta => {
+    ta.addEventListener("input", () => {
+      const proj = ta.closest('[data-project-id]');
+      const item = ta.closest('[data-item-id]');
+      if (!proj || !item) return;
+      updateActionable(proj.dataset.projectId, item.dataset.itemId, "notes", ta.value);
     });
   });
 }
@@ -2766,6 +2887,7 @@ async function loadStateFromCloud() {
     (byProject[a.project_id] = byProject[a.project_id] || []).push({
       id: a.id, text: a.text || '', done: !!a.done, status: a.status || null,
       priority: a.priority || 0, blocker: a.blocker || '', waitingFor: a.waiting_for || '',
+      notes: a.notes || '',
       parentId: a.parent_id || null,
       createdAt: a.created_at, updatedAt: a.updated_at, doneAt: a.done_at, stuckSince: a.stuck_since,
       labels: []
@@ -2853,6 +2975,7 @@ async function flushDirty() {
       text: a.text || '', done: !!a.done, status: a.status || null,
       priority: a.priority || 0,
       blocker: a.blocker || '', waiting_for: a.waitingFor || '',
+      notes: a.notes || '',
       parent_id: a.parentId || null,
       position: loc.position,
       updated_at: a.updatedAt || new Date().toISOString(),
@@ -2922,6 +3045,7 @@ async function maybeMigrateLocalStorage() {
         text: a.text || '', done: !!a.done, status: a.status || null,
         priority: a.priority || 0,
         blocker: a.blocker || '', waiting_for: a.waitingFor || '',
+        notes: a.notes || '',
         parent_id: a.parentId || null,
         position: i,
         created_at: a.createdAt || new Date().toISOString(),
