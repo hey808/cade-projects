@@ -271,6 +271,76 @@ input.search:focus + kbd { display: none; }
 .dd-quick .pill-waiting { color: var(--waiting); }
 .dd-quick .pill-backburner { color: var(--text-3); }
 
+/* Wind-down countdown chip (top-right of the daily dashboard) */
+.dd-top-right {
+  display: inline-flex; align-items: center; gap: 12px;
+  position: relative;
+}
+.wind-down {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-radius: 8px;
+  background: rgba(255, 107, 71, 0.08);
+  border: 1px solid rgba(255, 107, 71, 0.28);
+  cursor: pointer; user-select: none;
+  font-family: inherit;
+  transition: background 0.15s, border-color 0.15s;
+}
+.wind-down:hover { background: rgba(255, 107, 71, 0.16); border-color: rgba(255, 107, 71, 0.45); }
+.wind-down .label {
+  color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.07em;
+  font-weight: 600; font-size: 10px;
+  white-space: nowrap;
+}
+.wind-down .time {
+  color: var(--accent);
+  font-weight: 700; font-variant-numeric: tabular-nums;
+  font-size: 14px; letter-spacing: -0.01em;
+}
+.wind-down.urgent {
+  background: rgba(220, 38, 38, 0.12);
+  border-color: rgba(220, 38, 38, 0.35);
+}
+.wind-down.urgent .time { color: var(--bad); }
+.wind-down.done {
+  background: rgba(34, 197, 94, 0.10);
+  border-color: rgba(34, 197, 94, 0.30);
+}
+.wind-down.done .time { color: var(--good); font-size: 11px; font-weight: 600; }
+
+.wind-down-popover {
+  position: absolute; top: 100%; right: 0; margin-top: 6px;
+  background: var(--card); border: 1px solid var(--border-strong);
+  border-radius: 10px; padding: 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  z-index: 100; min-width: 220px;
+}
+.wind-down-popover .wd-title {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--text-3); margin-bottom: 8px;
+}
+.wind-down-popover .wd-time-input {
+  width: 100%;
+  background: var(--bg); border: 1px solid var(--border-strong);
+  color: var(--text); font-family: inherit;
+  padding: 8px 10px; border-radius: 6px; font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color-scheme: dark;
+}
+.wind-down-popover .wd-time-input:focus { outline: none; border-color: var(--accent); }
+.wind-down-popover .wd-hint {
+  font-size: 11px; color: var(--text-3);
+  margin-top: 8px; line-height: 1.4;
+}
+.wind-down-popover .wd-trigger {
+  background: transparent; border: 1px dashed var(--border-strong);
+  color: var(--text-3); padding: 7px 10px; border-radius: 5px;
+  font-family: inherit; font-size: 11px; cursor: pointer;
+  width: 100%; margin-top: 10px;
+}
+.wind-down-popover .wd-trigger:hover { color: var(--accent); border-color: var(--accent); }
+
 /* Tabs */
 .tabs {
   display: flex; gap: 4px;
@@ -1132,7 +1202,10 @@ ul.items li:hover .row-tool { opacity: 1; }
 <div class="daily-dashboard" id="daily-dashboard">
   <div class="dd-top">
     <div class="dd-date" id="dd-date-text"></div>
-    <div class="dd-stats" id="dd-stats"></div>
+    <div class="dd-top-right">
+      <div class="dd-stats" id="dd-stats"></div>
+      <div id="wind-down-wrap"></div>
+    </div>
   </div>
   <div class="dd-progress-row">
     <div class="dd-progress-bar"><div id="dd-progress-fill" style="width:0%"></div></div>
@@ -1194,6 +1267,10 @@ state.projects = state.projects || [];
 state.labels = state.labels || [];
 state.filters = state.filters || {};
 state.keystone = state.keystone || { date: null, text: "", done: false };
+state.windDown = state.windDown || { hour: 20, minute: 0, lastTriggeredDate: null };
+// Backfill in case stored state is older
+if (typeof state.windDown.hour   !== "number") state.windDown.hour = 20;
+if (typeof state.windDown.minute !== "number") state.windDown.minute = 0;
 // Migrate older flat-shape filters (status/priority/statuses/labelIds at top level)
 // to the new per-view map. The old global filter is discarded — each view now
 // keeps its own filter selection, with "home" lazily defaulting to status="today".
@@ -1911,6 +1988,169 @@ function wireTabs() {
     });
   });
 }
+
+// ─── Wind-down countdown ──────────────────────────────
+// Counts down to a user-set time (default 8pm local). When it hits zero,
+// every open "today"-status task has its status cleared so the next day
+// starts blank. State is per-user and syncs through user_prefs.
+let activeWindDownEditor = false;
+
+function getWindDownTargetToday() {
+  const t = new Date();
+  t.setHours(state.windDown.hour, state.windDown.minute, 0, 0);
+  return t;
+}
+function formatCountdown(ms) {
+  if (ms <= 0) return "0s";
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return h + "h " + m + "m";
+  if (m >= 5) return m + "m";
+  if (m > 0) return m + "m " + String(s).padStart(2, "0") + "s";
+  return s + "s";
+}
+function formatTargetLabel() {
+  const h = state.windDown.hour;
+  const m = state.windDown.minute;
+  const ampm = h >= 12 ? "pm" : "am";
+  const hh = ((h + 11) % 12) + 1;
+  return hh + (m ? ":" + String(m).padStart(2, "0") : "") + ampm;
+}
+
+function renderWindDown() {
+  const wrap = document.getElementById("wind-down-wrap");
+  if (!wrap) return;
+  const today = todayDateString();
+  const triggeredToday = state.windDown.lastTriggeredDate === today;
+  const popover = activeWindDownEditor ? (
+    '<div class="wind-down-popover" id="wind-down-popover">' +
+      '<div class="wd-title">Wind-down time</div>' +
+      '<input type="time" class="wd-time-input" id="wd-time-input" ' +
+        'value="' + String(state.windDown.hour).padStart(2, "0") + ":" +
+                    String(state.windDown.minute).padStart(2, "0") + '">' +
+      '<div class="wd-hint">When the timer hits 0, any open <strong>Today</strong> task gets its status cleared for a fresh tomorrow.</div>' +
+      '<button class="wd-trigger" id="wd-trigger-now">Wind down now</button>' +
+    '</div>'
+  ) : "";
+
+  if (triggeredToday) {
+    wrap.innerHTML =
+      '<button class="wind-down done" id="wind-down-btn" title="Wind-down triggered for today">' +
+        '<span class="label">Wind-down</span>' +
+        '<span class="time">Done · ' + formatTargetLabel() + '</span>' +
+      '</button>' + popover;
+    return;
+  }
+
+  const target = getWindDownTargetToday();
+  const ms = target.getTime() - Date.now();
+  const urgent = ms > 0 && ms < 30 * 60 * 1000; // last 30 min
+  wrap.innerHTML =
+    '<button class="wind-down' + (urgent ? " urgent" : "") + '" id="wind-down-btn" ' +
+      'title="Countdown to wind-down (' + formatTargetLabel() + '). Click to adjust.">' +
+      '<span class="label">Wind-down</span>' +
+      '<span class="time">' + formatCountdown(ms) + '</span>' +
+    '</button>' + popover;
+}
+
+function wireWindDown() {
+  const btn = document.getElementById("wind-down-btn");
+  if (btn) {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      activeWindDownEditor = !activeWindDownEditor;
+      renderWindDown();
+      if (activeWindDownEditor) {
+        setTimeout(() => {
+          const inp = document.getElementById("wd-time-input");
+          if (inp) inp.focus();
+        }, 0);
+      }
+    });
+  }
+  const inp = document.getElementById("wd-time-input");
+  if (inp) {
+    inp.addEventListener("change", () => {
+      const parts = inp.value.split(":");
+      if (parts.length !== 2) return;
+      state.windDown.hour   = parseInt(parts[0], 10) || 0;
+      state.windDown.minute = parseInt(parts[1], 10) || 0;
+      // Adjusting the time on the same day re-arms the trigger
+      state.windDown.lastTriggeredDate = null;
+      markPrefsDirty();
+      saveState();
+      renderWindDown();
+    });
+    // Don't close popover when interacting with the input
+    inp.addEventListener("click", (e) => e.stopPropagation());
+  }
+  const trig = document.getElementById("wd-trigger-now");
+  if (trig) {
+    trig.addEventListener("click", (e) => {
+      e.stopPropagation();
+      // Force-arm so the trigger doesn't skip due to "already done today"
+      state.windDown.lastTriggeredDate = null;
+      triggerWindDown(true);
+      activeWindDownEditor = false;
+    });
+  }
+}
+
+function triggerWindDown(manual) {
+  const today = todayDateString();
+  if (state.windDown.lastTriggeredDate === today) return;
+  let cleared = 0;
+  state.projects.forEach(p => {
+    p.actionables.forEach(a => {
+      if (a.done) return;
+      if (a.status !== "today") return;
+      a.status = null;
+      a.stuckSince = null;
+      a.blocker = "";
+      a.waitingFor = "";
+      touchActionable(a);
+      markActionDirty(a.id);
+      cleared++;
+    });
+  });
+  state.windDown.lastTriggeredDate = today;
+  markPrefsDirty();
+  saveState();
+  renderAll();
+  if (manual) {
+    // Tiny in-app acknowledgement so the user knows what happened
+    const wrap = document.getElementById("wind-down-wrap");
+    if (wrap) wrap.title = "Wound down " + cleared + " task" + (cleared === 1 ? "" : "s");
+  }
+}
+
+function tickWindDown() {
+  if (!state.windDown) return;
+  // Trigger check runs every tick regardless of editor state
+  const today = todayDateString();
+  if (state.windDown.lastTriggeredDate !== today) {
+    const target = getWindDownTargetToday();
+    if (Date.now() >= target.getTime()) {
+      triggerWindDown(false);
+      return;
+    }
+  }
+  // Don't redraw while user is editing the popover (would steal focus)
+  if (activeWindDownEditor) return;
+  renderWindDown();
+}
+
+// Close the popover on outside click
+document.addEventListener("click", (e) => {
+  if (activeWindDownEditor &&
+      !e.target.closest("#wind-down-popover") &&
+      !e.target.closest("#wind-down-btn")) {
+    activeWindDownEditor = false;
+    renderWindDown();
+  }
+});
 
 // ─── Date header ───────────────────────────────────────
 function renderDateHeader() {
@@ -2808,6 +3048,8 @@ function wireHomeView() {
 function renderAll() {
   renderDateHeader();
   renderDailyDashboard();
+  renderWindDown();
+  wireWindDown();
   renderFilterBar();
   renderTabs();
   // Re-validate currentView in case labels/projects changed
@@ -3003,6 +3245,11 @@ async function loadStateFromCloud() {
       text: prefsRes.data.keystone_text || "",
       done: !!prefsRes.data.keystone_done
     };
+    state.windDown = {
+      hour:   (typeof prefsRes.data.winddown_hour   === "number") ? prefsRes.data.winddown_hour   : 20,
+      minute: (typeof prefsRes.data.winddown_minute === "number") ? prefsRes.data.winddown_minute : 0,
+      lastTriggeredDate: prefsRes.data.winddown_last_triggered || null
+    };
   }
 }
 
@@ -3086,14 +3333,18 @@ async function flushDirty() {
   dirty.delProjects.forEach(id    => ops.push(sb.from('projects').delete().eq('id', id)));
   dirty.delTabs.forEach(id        => ops.push(sb.from('tabs').delete().eq('id', id)));
   if (dirty.prefs) {
-    // Filters stay device-local; only view name + keystone sync.
+    // Filters stay device-local; view name + keystone + wind-down sync.
     const k = state.keystone || {};
+    const w = state.windDown || {};
     ops.push(sb.from('user_prefs').upsert({
       user_id: currentUser.id,
       current_view: currentView || 'home',
       keystone_date: k.date || null,
       keystone_text: k.text || '',
-      keystone_done: !!k.done
+      keystone_done: !!k.done,
+      winddown_hour: (typeof w.hour === "number") ? w.hour : 20,
+      winddown_minute: (typeof w.minute === "number") ? w.minute : 0,
+      winddown_last_triggered: w.lastTriggeredDate || null
     }));
   }
   // reset
@@ -3200,13 +3451,21 @@ async function bootstrap() {
       await initAfterAuth();
     } else if (event === 'SIGNED_OUT') {
       currentUser = null;
-      state = { projects: [], labels: [], filters: {}, keystone: { date: null, text: "", done: false } };
+      state = {
+        projects: [], labels: [], filters: {},
+        keystone: { date: null, text: "", done: false },
+        windDown: { hour: 20, minute: 0, lastTriggeredDate: null }
+      };
       showAuthScreen();
     }
   });
 }
 
 bootstrap();
+
+// Wind-down countdown ticker: refreshes the chip every second and triggers
+// the auto-clear at the configured time. Runs for the whole app lifetime.
+setInterval(tickWindDown, 1000);
 </script>
 
 </body>
