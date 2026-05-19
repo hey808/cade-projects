@@ -1029,8 +1029,8 @@ ul.items .li-rm:hover { color: var(--bad); }
 
 <div class="filter-bar" id="filter-bar"></div>
 
-<div id="today-view" style="display:none;">
-  <div id="today-list-container"></div>
+<div id="home-view" style="display:none;">
+  <div id="home-list-container"></div>
 </div>
 
 <div id="projects-view">
@@ -1079,15 +1079,13 @@ let state = loadState();
 state.projects = state.projects || [];
 state.labels = state.labels || [];
 state.filters = state.filters || {};
-// Migrate from previous multi-select arrays to single-value dropdowns
-if (Array.isArray(state.filters.statuses)) {
-  state.filters.status = state.filters.statuses[0] || null;
-  delete state.filters.statuses;
+// Migrate older flat-shape filters (status/priority/statuses/labelIds at top level)
+// to the new per-view map. The old global filter is discarded — each view now
+// keeps its own filter selection, with "home" lazily defaulting to status="today".
+if ('status' in state.filters || 'priority' in state.filters ||
+    'statuses' in state.filters || 'labelIds' in state.filters || 'labelId' in state.filters) {
+  state.filters = {};
 }
-if (Array.isArray(state.filters.labelIds)) delete state.filters.labelIds;
-delete state.filters.labelId; // tabs replaced this filter
-if (state.filters.status === undefined)   state.filters.status = null;
-if (state.filters.priority === undefined) state.filters.priority = null;
 
 // Tab color palette — saturated tones that read on dark grey
 const COLOR_PALETTE = [
@@ -1140,7 +1138,9 @@ state.projects.forEach(p => {
 });
 saveState();
 
-let currentView = (window.localStorage.getItem("view") || "today");
+let currentView = (window.localStorage.getItem("view") || "home");
+if (currentView === "today") currentView = "home"; // legacy → renamed view
+window.localStorage.setItem("view", currentView);
 let activeStatusPicker = null; // "<projId>:<itemId>" or null
 let searchTerm = "";
 let expandedDone = new Set();
@@ -1175,41 +1175,58 @@ function ageBadgeData(updatedAtIso) {
 }
 function touchActionable(a) { a.updatedAt = new Date().toISOString(); }
 
-// ─── Filter helpers (Status + Priority only — label is now the tab) ──
-function isStatusFilterActive()   { return state.filters.status !== null; }
-function isPriorityFilterActive() { return state.filters.priority !== null; }
+// ─── Filter helpers (Status + Priority, scoped per-view) ──
+// state.filters is a map of view-id → { status, priority }. Filters are
+// remembered per tab so each one keeps its own selection. The "home" view
+// lazily defaults to status="today" the first time it's read.
+function getCurrentFilters() {
+  let f = state.filters[currentView];
+  if (!f) {
+    f = (currentView === "home")
+      ? { status: "today", priority: null }
+      : { status: null, priority: null };
+    state.filters[currentView] = f;
+  }
+  if (f.status === undefined)   f.status = null;
+  if (f.priority === undefined) f.priority = null;
+  return f;
+}
+function isStatusFilterActive()   { return getCurrentFilters().status !== null; }
+function isPriorityFilterActive() { return getCurrentFilters().priority !== null; }
 function isItemFilterActive()     { return isStatusFilterActive() || isPriorityFilterActive(); }
 function passesStatusFilter(a) {
-  if (!isStatusFilterActive()) return true;
+  const f = getCurrentFilters();
+  if (f.status === null) return true;
   const aStatus = a.status || "none";
-  return aStatus === state.filters.status;
+  return aStatus === f.status;
 }
 function passesPriorityFilter(a) {
-  if (!isPriorityFilterActive()) return true;
-  return a.priority === state.filters.priority;
+  const f = getCurrentFilters();
+  if (f.priority === null) return true;
+  return a.priority === f.priority;
 }
 function passesAllItemFilters(a) {
   return passesStatusFilter(a) && passesPriorityFilter(a);
 }
 function setFilter(type, value) {
-  if (type === "status")   state.filters.status = value;
-  else if (type === "priority") state.filters.priority = value;
-  markPrefsDirty();
+  const f = getCurrentFilters();
+  if (type === "status")   f.status = value;
+  else if (type === "priority") f.priority = value;
   saveState();
 }
 function clearFilters() {
-  state.filters.status = null;
-  state.filters.priority = null;
-  markPrefsDirty();
+  const f = getCurrentFilters();
+  f.status = null;
+  f.priority = null;
   saveState();
   renderFilterBar();
-  if (currentView === "today") renderToday();
+  if (currentView === "home") renderHome();
   else renderProjects();
 }
 
 // View → project filter (tab is the category)
 function projectsInCurrentView() {
-  if (currentView === "today") return [];
+  if (currentView === "home") return [];
   if (currentView === "all")          return state.projects;
   if (currentView === "uncategorized") return state.projects.filter(p => !p.labelId);
   return state.projects.filter(p => p.labelId === currentView);
@@ -1220,7 +1237,7 @@ let activeFilterDropdown = null;
 // ─── Project CRUD ──────────────────────────────────────
 function addProject() {
   let labelId = null;
-  if (currentView !== "today" && currentView !== "all" && currentView !== "uncategorized") {
+  if (currentView !== "home" && currentView !== "all" && currentView !== "uncategorized") {
     labelId = currentView;
   }
   const p = {
@@ -1228,7 +1245,7 @@ function addProject() {
     actionables: [], createdAt: new Date().toISOString()
   };
   state.projects.unshift(p);
-  if (currentView === "today") {
+  if (currentView === "home") {
     currentView = state.labels.length === 0 ? "all" : "uncategorized";
     window.localStorage.setItem("view", currentView);
     markPrefsDirty();
@@ -1350,26 +1367,28 @@ function deleteLabel(id) {
     if (p.labelId === id) { p.labelId = null; markProjectDirty(p.id); }
   });
   markTabDeleted(id);
-  if (currentView === id) { currentView = "today"; markPrefsDirty(); }
+  if (currentView === id) { currentView = "home"; markPrefsDirty(); }
+  if (state.filters && state.filters[id]) delete state.filters[id];
   saveState(); renderAll();
 }
 
 // ─── View switching ────────────────────────────────────
 function validViews() {
-  const set = new Set(["today"]);
+  const set = new Set(["home"]);
   if (state.labels.length === 0) set.add("all");
   state.labels.forEach(l => set.add(l.id));
   if (state.projects.some(p => !p.labelId)) set.add("uncategorized");
   return set;
 }
 function setView(view) {
+  if (view === "today") view = "home"; // legacy alias
   const valid = validViews();
-  if (!valid.has(view)) view = "today";
+  if (!valid.has(view)) view = "home";
   currentView = view;
   window.localStorage.setItem("view", view);
   markPrefsDirty();
-  document.getElementById('today-view').style.display = view === 'today' ? 'block' : 'none';
-  document.getElementById('projects-view').style.display = view !== 'today' ? 'block' : 'none';
+  document.getElementById('home-view').style.display = view === 'home' ? 'block' : 'none';
+  document.getElementById('projects-view').style.display = view !== 'home' ? 'block' : 'none';
   renderAll();
 }
 
@@ -1391,18 +1410,26 @@ function renderTabEditPopover(l) {
 
 function renderTabs() {
   const tabsEl = document.getElementById("tabs");
-  let todayOpen = 0;
+  // Home pill: reflect what the Home view is currently showing — counts open
+  // items that match the Home tab's saved status filter (defaults to "today").
+  const homeFilters = (state.filters && state.filters["home"]) || { status: "today", priority: null };
+  let homeOpen = 0;
   state.projects.forEach(p => p.actionables.forEach(a => {
-    if (!a.done && a.status === "today") todayOpen++;
+    if (a.done) return;
+    if (homeFilters.status !== null && homeFilters.status !== undefined &&
+        (a.status || "none") !== homeFilters.status) return;
+    if (homeFilters.priority !== null && homeFilters.priority !== undefined &&
+        a.priority !== homeFilters.priority) return;
+    homeOpen++;
   }));
 
   let html = '';
-  // Today (no color dot — it's the universal view)
+  // Home (no color dot — it's the universal view)
   html += '<div class="sidebar-tab-wrap">' +
-    '<button class="sidebar-tab' + (currentView === "today" ? " active" : "") + '" data-view="today">' +
+    '<button class="sidebar-tab' + (currentView === "home" ? " active" : "") + '" data-view="home">' +
       '<span class="dot" style="background:transparent;"></span>' +
-      '<span class="name">Today</span>' +
-      '<span class="pill">' + todayOpen + '</span>' +
+      '<span class="name">Home</span>' +
+      '<span class="pill">' + homeOpen + '</span>' +
     '</button>' +
   '</div>';
 
@@ -1457,7 +1484,7 @@ function wireTabs() {
   // Tab click → switch view (but not if clicking the edit icon)
   tabsEl.querySelectorAll('.sidebar-tab').forEach(t => {
     const view = t.dataset.view;
-    const isLabel = !["today", "all", "uncategorized"].includes(view);
+    const isLabel = !["home", "all", "uncategorized"].includes(view);
 
     t.addEventListener('click', (e) => {
       if (e.target.closest('[data-tab-edit]')) return;
@@ -1483,14 +1510,14 @@ function wireTabs() {
     t.addEventListener('dragover', (e) => {
       const types = Array.from(e.dataTransfer.types);
       if (types.includes("application/x-label")) {
-        if (!isLabel) return; // can't drop a label onto Today / Uncategorized / All
+        if (!isLabel) return; // can't drop a label onto Home / Uncategorized / All
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         t.classList.add('drag-target');
         return;
       }
       if (types.includes("application/x-project")) {
-        if (view === "today") return;
+        if (view === "home") return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         t.classList.add('drag-target');
@@ -1508,7 +1535,7 @@ function wireTabs() {
         return;
       }
       if (projId) {
-        if (view === "today") return;
+        if (view === "home") return;
         let newLabelId = null;
         if (view !== "uncategorized" && view !== "all") newLabelId = view;
         const p = findProject(projId);
@@ -1594,7 +1621,8 @@ function wireTabs() {
         if (p.labelId === id) { p.labelId = null; markProjectDirty(p.id); }
       });
       markTabDeleted(id);
-      if (currentView === id) { currentView = "today"; markPrefsDirty(); }
+      if (currentView === id) { currentView = "home"; markPrefsDirty(); }
+      if (state.filters && state.filters[id]) delete state.filters[id];
       activeTabEditor = null;
       saveState();
       renderAll();
@@ -1680,7 +1708,7 @@ function buildDropdownHtml(type, labelText, currentValue, options) {
 
 function renderFilterBar() {
   const bar = document.getElementById("filter-bar");
-  const fs = state.filters;
+  const fs = getCurrentFilters();
 
   const statusOpts = [
     { value: null,        label: "All" },
@@ -1724,8 +1752,9 @@ function renderFilterBar() {
       setFilter(type, val);
       activeFilterDropdown = null;
       renderFilterBar();
-      if (currentView === "today") renderToday();
+      if (currentView === "home") renderHome();
       else renderProjects();
+      renderTabs(); // home pill count depends on filter
     });
   });
   const clearBtn = document.getElementById("filter-clear-btn");
@@ -2150,7 +2179,13 @@ document.getElementById("search-input").addEventListener("input", (e) => {
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key === "k") {
     e.preventDefault();
-    if (currentView !== "projects") setView("projects");
+    // Search lives in the projects pane — jump out of Home if needed
+    if (currentView === "home") {
+      const target = state.labels.length > 0
+        ? state.labels[0].id
+        : (state.projects.some(p => !p.labelId) ? "uncategorized" : "all");
+      setView(target);
+    }
     setTimeout(() => document.getElementById("search-input").focus(), 0);
   }
   if (e.key === "Escape" && document.activeElement === document.getElementById("search-input")) {
@@ -2161,96 +2196,102 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// ─── Today tab stats ───────────────────────────────────
-function calcTotalTodayTasks() {
-  let count = 0;
-  state.projects.forEach(p => {
-    p.actionables.forEach(a => {
-      if (a.status === "today") count++;
-    });
-  });
-  return count;
+// ─── Home tab stats ────────────────────────────────────
+// All three metrics respect the active per-view filter (status/priority).
+// "Tasks completed" counts done items finished since this Sunday so the
+// number stays meaningful over time.
+function homeFilterPredicate() {
+  return (a) => passesAllItemFilters(a);
 }
-
-function calcHighPriorityTodayTasks() {
-  let count = 0;
-  state.projects.forEach(p => {
-    p.actionables.forEach(a => {
-      if (a.status === "today" && a.priority === 3) count++;
-    });
-  });
-  return count;
+function calcHomeOpenTotal() {
+  const ok = homeFilterPredicate();
+  let n = 0;
+  state.projects.forEach(p => p.actionables.forEach(a => {
+    if (!a.done && ok(a)) n++;
+  }));
+  return n;
 }
-
-function calcHighPriorityDoneThisWeek() {
-  // Calendar week starting Sunday at 00:00 local time
+function calcHomeHighPriority() {
+  const ok = homeFilterPredicate();
+  let n = 0;
+  state.projects.forEach(p => p.actionables.forEach(a => {
+    if (!a.done && a.priority === 3 && ok(a)) n++;
+  }));
+  return n;
+}
+function calcHomeCompletedThisWeek() {
+  const ok = homeFilterPredicate();
   const sunday = new Date();
   sunday.setHours(0, 0, 0, 0);
   sunday.setDate(sunday.getDate() - sunday.getDay());
   const sundayMs = sunday.getTime();
-  let count = 0;
-  state.projects.forEach(p => {
-    p.actionables.forEach(a => {
-      if (!a.done) return;
-      if (a.priority !== 3) return;
-      if (!a.doneAt) return;
-      if (new Date(a.doneAt).getTime() < sundayMs) return;
-      count++;
-    });
-  });
-  return count;
+  let n = 0;
+  state.projects.forEach(p => p.actionables.forEach(a => {
+    if (!a.done || !a.doneAt) return;
+    if (new Date(a.doneAt).getTime() < sundayMs) return;
+    if (!ok(a)) return;
+    n++;
+  }));
+  return n;
 }
 
-function renderTodayStats() {
-  const total = calcTotalTodayTasks();
-  const high  = calcHighPriorityTodayTasks();
-  const done  = calcHighPriorityDoneThisWeek();
+function renderHomeStats() {
+  const total = calcHomeOpenTotal();
+  const high  = calcHomeHighPriority();
+  const done  = calcHomeCompletedThisWeek();
   return '<div class="today-stats">' +
-    '<div class="today-stat">' +
-      '<div class="lbl">Today tasks</div>' +
-      '<div class="val">' + total + '</div>' +
-      '<div class="sub">total in Today</div>' +
-    '</div>' +
     '<div class="today-stat high">' +
-      '<div class="lbl">High priority today</div>' +
+      '<div class="lbl">High priority tasks</div>' +
       '<div class="val">' + high + '</div>' +
-      '<div class="sub">of ' + total + ' total</div>' +
+      '<div class="sub">of ' + total + ' open</div>' +
+    '</div>' +
+    '<div class="today-stat">' +
+      '<div class="lbl">Total tasks</div>' +
+      '<div class="val">' + total + '</div>' +
+      '<div class="sub">open & matching filters</div>' +
     '</div>' +
     '<div class="today-stat good">' +
-      '<div class="lbl">High priority done this week</div>' +
+      '<div class="lbl">Tasks completed</div>' +
       '<div class="val">' + done + '</div>' +
       '<div class="sub">since Sunday</div>' +
     '</div>' +
   '</div>';
 }
 
-// ─── Render: Today view ────────────────────────────────
-function renderToday() {
-  const container = document.getElementById("today-list-container");
+// ─── Render: Home view ─────────────────────────────────
+// Home shows tasks across ALL tabs, filtered by the Home view's status/priority
+// selection (defaults to status="today"). Groups items by their parent project.
+function renderHome() {
+  const container = document.getElementById("home-list-container");
 
-  // Always render stats at the top
-  const statsHtml = renderTodayStats();
+  const statsHtml = renderHomeStats();
+  const ok = homeFilterPredicate();
+  const filters = getCurrentFilters();
+  const filterActive = filters.status !== null || filters.priority !== null;
 
   const groups = [];
   state.projects.forEach(p => {
-    let items = p.actionables.filter(a => a.status === "today");
-    if (isItemFilterActive()) items = items.filter(passesAllItemFilters);
+    const items = p.actionables.filter(a => !a.done && ok(a));
     if (items.length) groups.push({ project: p, items });
   });
 
   if (groups.length === 0) {
-    const filtered = isItemFilterActive();
-    container.innerHTML = statsHtml +
-      '<div class="empty-state">' +
-        '<h2>' + (filtered ? "Nothing matches the current filters" : "Nothing on today") + '</h2>' +
-        '<p>' + (filtered ? "Try clearing filters above." : "Open the Projects tab and set an actionable\'s status to <strong>Today</strong>.") + '</p>' +
-      '</div>';
+    let msg;
+    if (filters.status === "today" && filters.priority === null) {
+      msg = '<h2>Nothing on today</h2>' +
+            '<p>Open a project tab and set an actionable\'s status to <strong>Today</strong>.</p>';
+    } else if (filterActive) {
+      msg = '<h2>Nothing matches the current filters</h2>' +
+            '<p>Try clearing filters above or adjusting the status / priority selection.</p>';
+    } else {
+      msg = '<h2>No open tasks</h2>' +
+            '<p>Add a project and some actionables to get started.</p>';
+    }
+    container.innerHTML = statsHtml + '<div class="empty-state">' + msg + '</div>';
     return;
   }
 
-  groups.forEach(g => {
-    g.items.sort((x, y) => (x.done === y.done ? 0 : x.done ? 1 : -1));
-  });
+  groups.forEach(g => g.items.sort((x, y) => (x.done === y.done ? 0 : x.done ? 1 : -1)));
 
   container.innerHTML = statsHtml + groups.map(g => {
     const openCount = g.items.filter(i => !i.done).length;
@@ -2268,28 +2309,28 @@ function renderToday() {
           '</span>' +
         '</h3>' +
         '<div class="today-list">' +
-          g.items.map(a => renderTodayItem(g.project, a)).join("") +
+          g.items.map(a => renderHomeItem(g.project, a)).join("") +
         '</div>' +
       '</div>'
     );
   }).join("");
 
-  wireTodayView();
+  wireHomeView();
 }
 
-function renderTodayItem(p, a) {
+function renderHomeItem(p, a) {
   return (
     '<div class="today-item' + (a.done ? " done" : "") + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
-      '<input type="checkbox" data-action="today-toggle"' + (a.done ? " checked" : "") + '>' +
+      '<input type="checkbox" data-action="home-toggle"' + (a.done ? " checked" : "") + '>' +
       '<div class="text">' + escapeAttr(a.text || "(untitled)") + '</div>' +
       '<div class="proj-tag" data-action="jump-to-project">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
     '</div>'
   );
 }
 
-function wireTodayView() {
-  const container = document.getElementById("today-list-container");
-  container.querySelectorAll('input[type="checkbox"][data-action="today-toggle"]').forEach(cb => {
+function wireHomeView() {
+  const container = document.getElementById("home-list-container");
+  container.querySelectorAll('input[type="checkbox"][data-action="home-toggle"]').forEach(cb => {
     cb.addEventListener("change", () => {
       const wrap = cb.closest('.today-item');
       updateActionable(wrap.dataset.projectId, wrap.dataset.itemId, "done", cb.checked);
@@ -2298,9 +2339,14 @@ function wireTodayView() {
   });
   container.querySelectorAll('[data-action="jump-to-project"]').forEach(tag => {
     tag.addEventListener("click", () => {
-      setView("projects");
+      const wrap = tag.closest('.today-item');
+      const proj = findProject(wrap.dataset.projectId);
+      // Jump to the tab that actually contains the project
+      const target = proj
+        ? (proj.labelId || (state.labels.length === 0 ? "all" : "uncategorized"))
+        : (state.labels.length === 0 ? "all" : "uncategorized");
+      setView(target);
       setTimeout(() => {
-        const wrap = tag.closest('.today-item');
         const el = document.querySelector('[data-project-id="' + wrap.dataset.projectId + '"]');
         if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 0);
@@ -2316,13 +2362,13 @@ function renderAll() {
   // Re-validate currentView in case labels/projects changed
   const valid = validViews();
   if (!valid.has(currentView)) {
-    currentView = "today";
+    currentView = "home";
     window.localStorage.setItem("view", currentView);
     renderTabs();
   }
-  document.getElementById('today-view').style.display = currentView === 'today' ? 'block' : 'none';
-  document.getElementById('projects-view').style.display = currentView !== 'today' ? 'block' : 'none';
-  if (currentView === "today") renderToday();
+  document.getElementById('home-view').style.display = currentView === 'home' ? 'block' : 'none';
+  document.getElementById('projects-view').style.display = currentView !== 'home' ? 'block' : 'none';
+  if (currentView === "home") renderHome();
   else renderProjects();
 }
 
@@ -2492,11 +2538,12 @@ async function loadStateFromCloud() {
     actionables: byProject[p.id] || [], createdAt: p.created_at
   }));
 
-  state.filters = {
-    status:   (prefsRes.data && prefsRes.data.filter_status)   || null,
-    priority: (prefsRes.data && prefsRes.data.filter_priority != null) ? prefsRes.data.filter_priority : null
-  };
-  currentView = (prefsRes.data && prefsRes.data.current_view) || "today";
+  // Per-view filter selections live only in localStorage (state.filters is
+  // already populated from there). Just pull the current view from cloud.
+  state.filters = state.filters || {};
+  let cloudView = (prefsRes.data && prefsRes.data.current_view) || "home";
+  if (cloudView === "today") cloudView = "home";
+  currentView = cloudView;
 }
 
 // ─── Dirty tracking + debounced flush ──────────────────
@@ -2577,11 +2624,11 @@ async function flushDirty() {
   dirty.delProjects.forEach(id    => ops.push(sb.from('projects').delete().eq('id', id)));
   dirty.delTabs.forEach(id        => ops.push(sb.from('tabs').delete().eq('id', id)));
   if (dirty.prefs) {
+    // Only the current view name syncs to the cloud — filters are per-tab now
+    // and kept in localStorage so they remain device-local.
     ops.push(sb.from('user_prefs').upsert({
       user_id: currentUser.id,
-      current_view: currentView || 'today',
-      filter_status: state.filters.status,
-      filter_priority: state.filters.priority
+      current_view: currentView || 'home'
     }));
   }
   // reset
@@ -2686,8 +2733,7 @@ async function bootstrap() {
       await initAfterAuth();
     } else if (event === 'SIGNED_OUT') {
       currentUser = null;
-      state = { projects: [], labels: [] };
-      state.filters = { status: null, priority: null };
+      state = { projects: [], labels: [], filters: {} };
       showAuthScreen();
     }
   });
