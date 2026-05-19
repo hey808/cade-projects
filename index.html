@@ -295,6 +295,23 @@ input.search:focus + kbd { display: none; }
 .wind-down.done .wd-label { color: var(--good); }
 .wind-down.done .wd-time  { color: var(--good); font-size: 22px; font-family: var(--font-sans); font-weight: 600; }
 
+/* Earned state — celebratory single-message card */
+.wind-down.earned {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.14), rgba(34, 197, 94, 0.02));
+  border-color: rgba(34, 197, 94, 0.40);
+}
+.wind-down.earned:hover { border-color: rgba(34, 197, 94, 0.60); }
+.wd-earned {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 26px;
+  color: var(--text);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-variation-settings: "opsz" 60;
+  text-align: right;
+}
+
 /* Deep Work mode — replaces the wind-down card while a focus session runs */
 .wind-down.deep {
   background: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(59, 130, 246, 0.02));
@@ -2149,6 +2166,7 @@ function renderTabs() {
       '<span class="name">Morning Journal</span>' +
     '</button>' +
   '</div>';
+  html += '<div class="sidebar-divider"></div>';
   // Home — universal task view, styled as a card to match the journal tab
   html += '<div class="sidebar-tab-wrap">' +
     '<button class="sidebar-tab home-tab' + (currentView === "home" ? " active" : "") + '" data-view="home">' +
@@ -2156,7 +2174,6 @@ function renderTabs() {
       '<span class="pill">' + homeOpen + '</span>' +
     '</button>' +
   '</div>';
-  html += '<div class="sidebar-divider"></div>';
 
   if (state.labels.length === 0 && state.projects.length > 0) {
     html += '<div class="sidebar-tab-wrap">' +
@@ -2496,6 +2513,26 @@ function dayProgressRatio() {
   const r = (Date.now() - start) / (end - start);
   return Math.max(0, Math.min(1, r));
 }
+// Phase machine for the wind-down card:
+//   "before" — before today's start, never triggered → 0h 00m 00s
+//   "active" — inside today's start→end window → counting down
+//   "earned" — wound down (auto or manual). Persists across midnight until
+//              the next day's start time.
+function windDownPhase() {
+  const now = Date.now();
+  const startToday = getDayStartToday().getTime();
+  const endToday   = getWindDownTargetToday().getTime();
+  const today = todayDateString();
+  const y = new Date(Date.now() - 86400000);
+  const yesterday = y.getFullYear() + "-" +
+    String(y.getMonth() + 1).padStart(2, "0") + "-" +
+    String(y.getDate()).padStart(2, "0");
+  if (state.windDown.lastTriggeredDate === today) return "earned";
+  if (now >= endToday) return "earned";
+  if (now < startToday && state.windDown.lastTriggeredDate === yesterday) return "earned";
+  if (now >= startToday && now < endToday) return "active";
+  return "before";
+}
 
 // Reusable circular progress SVG (used by dashboard + wind-down)
 function buildProgressCircle(opts) {
@@ -2581,8 +2618,7 @@ function renderWindDown() {
     return;
   }
 
-  const today = todayDateString();
-  const triggeredToday = state.windDown.lastTriggeredDate === today;
+  const phase = windDownPhase();
   const popover = activeWindDownEditor ? (
     '<div class="wind-down-popover" id="wind-down-popover">' +
       '<div class="wd-title">Day starts</div>' +
@@ -2598,6 +2634,24 @@ function renderWindDown() {
     '</div>'
   ) : "";
 
+  // Earned state — full card celebrates the wind-down until the next start
+  if (phase === "earned") {
+    const earnedCircle = buildProgressCircle({
+      size: 76, pct: 1, color: 'var(--good)',
+      label: "✓", sub: "done",
+      labelSize: 16, subSize: 4.5
+    });
+    wrap.innerHTML =
+      '<div class="wind-down earned" id="wind-down-btn" title="Click to adjust">' +
+        '<div class="wd-circle">' + earnedCircle + '</div>' +
+        '<div class="wd-text">' +
+          '<div class="wd-earned">Wind down,<br>you earned it</div>' +
+        '</div>' +
+      '</div>' + popover;
+    wireWindDown();
+    return;
+  }
+
   // Day-progress ratio drives the orange ring on the wind-down card
   const dayRatio = dayProgressRatio();
   const ringColor = dayRatio >= 0.85 ? 'var(--bad)' : 'var(--accent)';
@@ -2606,20 +2660,6 @@ function renderWindDown() {
     label: Math.round(dayRatio * 100) + "%", sub: "of day",
     labelSize: 9, subSize: 4.5
   });
-
-  if (triggeredToday) {
-    wrap.innerHTML =
-      '<div class="wind-down done" id="wind-down-btn" title="Wound down for today">' +
-        '<div class="wd-circle">' + dayCircle + '</div>' +
-        '<div class="wd-text">' +
-          '<div class="wd-label">Wind-down complete</div>' +
-          '<div class="wd-target">' + formatStartLabel() + " → " + formatTargetLabel() + ' · click to adjust</div>' +
-          '<div class="wd-time">Done</div>' +
-        '</div>' +
-      '</div>' + popover;
-    wireWindDown();
-    return;
-  }
 
   // Only count down while we're inside the start→end window. Otherwise
   // the timer displays 0h 00m 00s and re-arms at the next start.
