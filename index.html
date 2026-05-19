@@ -2,32 +2,40 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Projects</title>
+<title>Slate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
   color-scheme: dark;
-  --bg: #09090b;
-  --card: #18181b;
-  --card-hover: #1f1f23;
-  --border: #27272a;
-  --border-strong: #3f3f46;
-  --text: #fafafa;
-  --text-2: #a1a1aa;
-  --text-3: #71717a;
-  --text-4: #52525b;
+
+  /* Dark grey + red-orange */
+  --bg: #1c1c1e;
+  --card: #28282c;
+  --card-hover: #34343a;
+  --border: #3a3a40;
+  --border-strong: #4d4d54;
+  --text: #f5f5f5;
+  --text-2: #b8b8bc;
+  --text-3: #888890;
+  --text-4: #5c5c64;
   --good: #22c55e;
   --warn: #eab308;
-  --bad: #ef4444;
-  --accent: #f59e0b;
+  --bad:  #dc2626;
+  --accent: #ff6b47;
   --waiting: #3b82f6;
-  --backburner: #71717a;
-  --prio-high: #ef4444;
-  --prio-med: #eab308;
-  --prio-low: #3b82f6;
+  --backburner: #888890;
+  --prio-high: #dc2626;
+  --prio-med:  #eab308;
+  --prio-low:  #3b82f6;
+
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-serif: 'Fraunces', Georgia, "Times New Roman", serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
   line-height: 1.45;
@@ -35,6 +43,8 @@ body {
   max-width: 980px;
   margin: 0 auto;
   font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Header */
@@ -42,7 +52,13 @@ header {
   display: flex; justify-content: space-between; align-items: flex-start;
   margin-bottom: 14px; gap: 12px; flex-wrap: wrap;
 }
-header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+header h1 {
+  font-family: var(--font-serif);
+  font-size: 30px; font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variation-settings: "opsz" 96;
+  line-height: 1.05;
+}
 header .date { font-size: 12px; color: var(--text-3); margin-top: 4px; font-weight: 500; }
 .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
@@ -73,8 +89,8 @@ input.search:focus + kbd { display: none; }
 
 /* Daily progress dashboard */
 .daily-dashboard {
-  background: linear-gradient(135deg, #1a1611 0%, #0e0c09 100%);
-  border: 1px solid rgba(245, 158, 11, 0.20);
+  background: linear-gradient(135deg, #2e2925 0%, #1c1c1e 100%);
+  border: 1px solid rgba(255, 107, 71, 0.28);
   border-radius: 12px;
   padding: 14px 18px;
   margin-bottom: 14px;
@@ -138,6 +154,114 @@ input.search:focus + kbd { display: none; }
   font-variant-numeric: tabular-nums; font-weight: 600;
 }
 .tab.active .pill { background: var(--accent); color: #0a0a0a; }
+.tab .tab-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.tab.drag-target {
+  background: rgba(255, 107, 71, 0.15);
+  border-radius: 6px 6px 0 0;
+}
+.tab-wrap { position: relative; display: inline-flex; align-items: center; }
+.tab .tab-edit-icon {
+  display: none; margin-left: 4px; color: var(--text-4);
+  font-size: 14px; line-height: 1; cursor: pointer; padding: 0 2px;
+  border-radius: 3px;
+}
+.tab:hover .tab-edit-icon, .tab.active .tab-edit-icon { display: inline-flex; }
+.tab .tab-edit-icon:hover { color: var(--text); background: var(--card-hover); }
+
+.tab-add {
+  background: transparent; border: 1px dashed var(--border-strong);
+  color: var(--text-3);
+  padding: 4px 12px;
+  border-radius: 6px 6px 0 0;
+  font-size: 16px; font-weight: 400; line-height: 1;
+  cursor: pointer; font-family: inherit;
+  margin-bottom: -1px;
+  align-self: stretch;
+}
+.tab-add:hover { border-color: var(--accent); color: var(--accent); background: rgba(255, 107, 71, 0.08); }
+
+.tab-edit-popover {
+  position: absolute; top: 100%; left: 0;
+  background: var(--card); border: 1px solid var(--border-strong);
+  border-radius: 8px; padding: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 100; min-width: 240px; margin-top: 6px;
+}
+.tab-edit-popover input.name {
+  width: 100%; background: var(--bg); border: 1px solid var(--border-strong);
+  color: var(--text); border-radius: 5px;
+  padding: 6px 9px; font-size: 13px; font-family: inherit;
+  margin-bottom: 10px;
+}
+.tab-edit-popover input.name:focus { outline: none; border-color: var(--accent); }
+.tab-edit-popover .swatches {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.tab-edit-popover .delete-btn {
+  background: transparent; border: 1px solid var(--border-strong);
+  color: var(--text-3);
+  padding: 5px 10px; font-size: 11px;
+  border-radius: 5px; cursor: pointer; font-family: inherit;
+  width: 100%;
+}
+.tab-edit-popover .delete-btn:hover { color: var(--bad); border-color: var(--bad); background: rgba(239, 68, 68, 0.1); }
+
+/* Filter bar */
+.filter-bar {
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+  padding: 0 0 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.filter-dropdown { position: relative; }
+.filter-dropdown-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text-2);
+  padding: 6px 10px; border-radius: 6px;
+  font-size: 11px; font-weight: 500;
+  cursor: pointer; font-family: inherit;
+  white-space: nowrap;
+}
+.filter-dropdown-btn:hover { border-color: var(--border-strong); color: var(--text); }
+.filter-dropdown-btn.active { border-color: var(--accent); }
+.filter-dropdown-btn .label { color: var(--text-3); }
+.filter-dropdown-btn .value { color: var(--text); font-weight: 600; }
+.filter-dropdown-btn .caret { color: var(--text-4); font-size: 9px; margin-left: 2px; }
+.filter-dropdown-btn .dot.small {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+}
+
+.filter-dropdown-menu {
+  position: absolute; top: 100%; left: 0;
+  background: var(--card); border: 1px solid var(--border-strong);
+  border-radius: 8px; padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 50; min-width: 180px; margin-top: 4px;
+}
+.filter-dropdown-menu .option {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-radius: 5px;
+  cursor: pointer; font-size: 12px;
+  color: var(--text);
+}
+.filter-dropdown-menu .option:hover { background: var(--card-hover); }
+.filter-dropdown-menu .option.selected { background: var(--card-hover); }
+.filter-dropdown-menu .option .dot {
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+}
+.filter-dropdown-menu .option .check {
+  margin-left: auto; color: var(--accent); font-size: 11px;
+}
+
+.filter-clear {
+  font-size: 11px; color: var(--text-3);
+  background: none; border: none; cursor: pointer;
+  text-decoration: underline; font-family: inherit;
+  margin-left: auto;
+}
+.filter-clear:hover { color: var(--text); }
 
 /* Buttons */
 .btn {
@@ -251,8 +375,10 @@ input.search:focus + kbd { display: none; }
 }
 .proj-name {
   flex: 1; min-width: 0; background: transparent; border: none;
-  font-size: 18px; font-weight: 600; letter-spacing: -0.01em;
-  color: var(--text); font-family: inherit; padding: 2px 0;
+  font-family: var(--font-serif);
+  font-size: 22px; font-weight: 500; letter-spacing: -0.01em;
+  font-variation-settings: "opsz" 36;
+  color: var(--text); padding: 2px 0;
 }
 .proj-name:focus { outline: none; }
 .proj-name::placeholder { color: var(--text-4); font-weight: 500; }
@@ -403,7 +529,7 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
   border-color: var(--border-strong);
 }
 .status-chip.unset:hover { color: var(--text-2); border-color: var(--border); }
-.status-chip.today      { background: rgba(245, 158, 11, 0.15); color: var(--accent);     border-color: var(--accent); }
+.status-chip.today      { background: rgba(255, 107, 71, 0.18); color: var(--accent);     border-color: var(--accent); }
 .status-chip.backburner { background: rgba(113, 113, 122, 0.18); color: var(--text-2);    border-color: var(--text-3); }
 .status-chip.waiting    { background: rgba(59, 130, 246, 0.15);  color: var(--waiting);   border-color: var(--waiting); }
 .status-chip.stuck      { background: rgba(239, 68, 68, 0.15);   color: var(--bad);       border-color: var(--bad); }
@@ -496,8 +622,40 @@ ul.items .li-rm:hover { color: var(--bad); }
   border: 1px dashed var(--border-strong); border-radius: 12px;
   color: var(--text-3);
 }
-.empty-state h2 { font-size: 16px; font-weight: 500; color: var(--text-2); margin-bottom: 6px; }
+.empty-state h2 {
+  font-family: var(--font-serif);
+  font-size: 22px; font-weight: 500; color: var(--text-2);
+  margin-bottom: 8px; letter-spacing: -0.01em;
+  font-variation-settings: "opsz" 36;
+}
 .empty-state p { font-size: 12px; margin-bottom: 14px; }
+
+/* Today view: stat strip */
+.today-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.today-stat {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.today-stat .lbl {
+  font-size: 10px; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+}
+.today-stat .val {
+  font-size: 28px; font-weight: 600; color: var(--text);
+  margin-top: 4px; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.today-stat.high .val { color: var(--prio-high); }
+.today-stat.good .val { color: var(--good); }
+.today-stat .sub { font-size: 10px; color: var(--text-4); margin-top: 3px; }
+@media (max-width: 640px) { .today-stats { grid-template-columns: 1fr; } }
 
 /* Today view */
 .today-list { display: flex; flex-direction: column; gap: 6px; }
@@ -534,7 +692,7 @@ ul.items .li-rm:hover { color: var(--bad); }
 
 <header>
   <div>
-    <h1>Projects</h1>
+    <h1>Slate</h1>
     <div class="date" id="header-date"></div>
   </div>
   <div class="header-actions">
@@ -543,7 +701,6 @@ ul.items .li-rm:hover { color: var(--bad); }
       <input type="text" class="search" id="search-input" placeholder="Search projects, actionables…">
       <kbd>⌘K</kbd>
     </div>
-    <button class="btn ghost" id="labels-btn" title="Manage labels">Labels</button>
     <button class="btn ghost" id="import-btn" title="Import projects from JSON">Import</button>
     <button class="btn ghost" id="export-btn" title="Export projects as JSON">Export</button>
     <button class="btn accent" id="new-project">+ New project</button>
@@ -562,16 +719,9 @@ ul.items .li-rm:hover { color: var(--bad); }
   <div class="dd-quick" id="dd-quick"></div>
 </div>
 
-<div class="labels-panel hidden" id="labels-panel">
-  <h3>Labels</h3>
-  <div id="labels-list"></div>
-  <button class="btn add-line" id="add-label-btn">+ New label</button>
-</div>
+<div class="tabs" id="tabs"></div>
 
-<div class="tabs">
-  <button class="tab" data-view="today" id="tab-today">Today <span class="pill" id="today-pill">0</span></button>
-  <button class="tab" data-view="projects" id="tab-projects">Projects <span class="pill" id="projects-pill">0</span></button>
-</div>
+<div class="filter-bar" id="filter-bar"></div>
 
 <div id="today-view" style="display:none;">
   <div id="today-list-container"></div>
@@ -585,10 +735,10 @@ ul.items .li-rm:hover { color: var(--bad); }
 // ─── Status definitions ────────────────────────────────
 const STATUSES = ["today", "backburner", "waiting", "stuck"];
 const STATUS_META = {
-  today:      { label: "Today",      color: "#f59e0b" },
-  backburner: { label: "Backburner", color: "#71717a" },
+  today:      { label: "Today",      color: "#ff6b47" },
+  backburner: { label: "Backburner", color: "#888890" },
   waiting:    { label: "Waiting",    color: "#3b82f6" },
-  stuck:      { label: "Stuck",      color: "#ef4444" }
+  stuck:      { label: "Stuck",      color: "#dc2626" }
 };
 
 // ─── State ──────────────────────────────────────────────
@@ -601,17 +751,28 @@ function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
 let state = loadState();
 state.projects = state.projects || [];
 state.labels = state.labels || [];
+state.filters = state.filters || {};
+// Migrate from previous multi-select arrays to single-value dropdowns
+if (Array.isArray(state.filters.statuses)) {
+  state.filters.status = state.filters.statuses[0] || null;
+  delete state.filters.statuses;
+}
+if (Array.isArray(state.filters.labelIds)) delete state.filters.labelIds;
+delete state.filters.labelId; // tabs replaced this filter
+if (state.filters.status === undefined)   state.filters.status = null;
+if (state.filters.priority === undefined) state.filters.priority = null;
 
+// Tab color palette — saturated tones that read on dark grey
 const COLOR_PALETTE = [
-  { name: "purple", hex: "#a855f7" },
-  { name: "blue",   hex: "#3b82f6" },
-  { name: "cyan",   hex: "#06b6d4" },
-  { name: "green",  hex: "#22c55e" },
-  { name: "yellow", hex: "#eab308" },
-  { name: "orange", hex: "#f97316" },
-  { name: "red",    hex: "#ef4444" },
-  { name: "pink",   hex: "#ec4899" },
-  { name: "gray",   hex: "#71717a" }
+  { name: "coral",   hex: "#ff6b47" },
+  { name: "red",     hex: "#dc2626" },
+  { name: "orange",  hex: "#f97316" },
+  { name: "yellow",  hex: "#eab308" },
+  { name: "green",   hex: "#22c55e" },
+  { name: "cyan",    hex: "#06b6d4" },
+  { name: "blue",    hex: "#3b82f6" },
+  { name: "purple",  hex: "#a855f7" },
+  { name: "pink",    hex: "#ec4899" }
 ];
 
 // Migrate schema
@@ -652,8 +813,7 @@ state.projects.forEach(p => {
 });
 saveState();
 
-let currentView = (window.localStorage.getItem("view") || "projects");
-let activeLabelPicker = null;
+let currentView = (window.localStorage.getItem("view") || "today");
 let activeStatusPicker = null; // "<projId>:<itemId>" or null
 let searchTerm = "";
 let expandedDone = new Set();
@@ -688,13 +848,63 @@ function ageBadgeData(updatedAtIso) {
 }
 function touchActionable(a) { a.updatedAt = new Date().toISOString(); }
 
+// ─── Filter helpers (Status + Priority only — label is now the tab) ──
+function isStatusFilterActive()   { return state.filters.status !== null; }
+function isPriorityFilterActive() { return state.filters.priority !== null; }
+function isItemFilterActive()     { return isStatusFilterActive() || isPriorityFilterActive(); }
+function passesStatusFilter(a) {
+  if (!isStatusFilterActive()) return true;
+  const aStatus = a.status || "none";
+  return aStatus === state.filters.status;
+}
+function passesPriorityFilter(a) {
+  if (!isPriorityFilterActive()) return true;
+  return a.priority === state.filters.priority;
+}
+function passesAllItemFilters(a) {
+  return passesStatusFilter(a) && passesPriorityFilter(a);
+}
+function setFilter(type, value) {
+  if (type === "status")   state.filters.status = value;
+  else if (type === "priority") state.filters.priority = value;
+  saveState();
+}
+function clearFilters() {
+  state.filters.status = null;
+  state.filters.priority = null;
+  saveState();
+  renderFilterBar();
+  if (currentView === "today") renderToday();
+  else renderProjects();
+}
+
+// View → project filter (tab is the category)
+function projectsInCurrentView() {
+  if (currentView === "today") return [];
+  if (currentView === "all")          return state.projects;
+  if (currentView === "uncategorized") return state.projects.filter(p => !p.labelId);
+  return state.projects.filter(p => p.labelId === currentView);
+}
+
+let activeFilterDropdown = null;
+
 // ─── Project CRUD ──────────────────────────────────────
 function addProject() {
+  // Project inherits the current tab's label, or null if Today/all/uncategorized
+  let labelId = null;
+  if (currentView !== "today" && currentView !== "all" && currentView !== "uncategorized") {
+    labelId = currentView;
+  }
   const p = {
-    id: uid(), name: "", goal: "", labelId: null,
+    id: uid(), name: "", goal: "", labelId,
     actionables: [], createdAt: new Date().toISOString()
   };
   state.projects.unshift(p);
+  // If we're on Today, switch to a place where the user can see the new project
+  if (currentView === "today") {
+    currentView = state.labels.length === 0 ? "all" : "uncategorized";
+    window.localStorage.setItem("view", currentView);
+  }
   saveState(); renderAll();
   setTimeout(() => {
     const el = document.querySelector('[data-project-id="' + p.id + '"] .proj-name');
@@ -713,7 +923,7 @@ function updateProjectField(id, field, value) {
 function setProjectLabel(projId, labelId) {
   const p = findProject(projId); if (!p) return;
   p.labelId = labelId || null;
-  saveState(); renderProjects();
+  saveState(); renderAll();
 }
 
 // ─── Actionables ───────────────────────────────────────
@@ -783,43 +993,215 @@ function reorderActionables(projId, draggedId, targetId) {
   saveState(); renderProjects();
 }
 
-// ─── Labels CRUD ───────────────────────────────────────
-function addLabel() {
-  const used = state.labels.map(l => l.color);
-  const next = COLOR_PALETTE.find(c => !used.includes(c.hex)) || COLOR_PALETTE[0];
-  state.labels.push({ id: uid(), name: "", color: next.hex });
-  saveState(); renderLabelsPanel();
-  setTimeout(() => {
-    const inputs = document.querySelectorAll("#labels-list .label-name");
-    const last = inputs[inputs.length - 1];
-    if (last) last.focus();
-  }, 0);
-}
+// ─── Labels (tab) CRUD ─────────────────────────────────
 function updateLabel(id, field, value) {
   const l = findLabel(id); if (!l) return;
   l[field] = value; saveState();
-  if (field === "color") renderLabelsPanel();
-  renderProjects();
+  renderTabs();
 }
 function deleteLabel(id) {
-  if (!confirm("Delete this label? Projects using it will become unlabeled.")) return;
+  if (!confirm("Delete this tab? Projects in it will become Uncategorized.")) return;
   state.labels = state.labels.filter(l => l.id !== id);
   state.projects.forEach(p => { if (p.labelId === id) p.labelId = null; });
-  saveState(); renderLabelsPanel(); renderAll();
+  if (currentView === id) currentView = "today";
+  saveState(); renderAll();
 }
 
 // ─── View switching ────────────────────────────────────
+function validViews() {
+  const set = new Set(["today"]);
+  if (state.labels.length === 0) set.add("all");
+  state.labels.forEach(l => set.add(l.id));
+  if (state.projects.some(p => !p.labelId)) set.add("uncategorized");
+  return set;
+}
 function setView(view) {
+  const valid = validViews();
+  if (!valid.has(view)) view = "today";
   currentView = view;
   window.localStorage.setItem("view", view);
-  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === view));
   document.getElementById('today-view').style.display = view === 'today' ? 'block' : 'none';
-  document.getElementById('projects-view').style.display = view === 'projects' ? 'block' : 'none';
+  document.getElementById('projects-view').style.display = view !== 'today' ? 'block' : 'none';
   renderAll();
 }
-document.querySelectorAll('.tab').forEach(t => {
-  t.addEventListener('click', () => setView(t.dataset.view));
-});
+
+// ─── Render tabs ───────────────────────────────────────
+let activeTabEditor = null; // labelId currently being edited, or null
+
+function renderTabEditPopover(l) {
+  const swatches = COLOR_PALETTE.map(c =>
+    '<div class="color-swatch ' + (l.color === c.hex ? "selected" : "") + '" ' +
+      'data-color="' + c.hex + '" data-label-id="' + l.id + '" ' +
+      'style="background:' + c.hex + ';" title="' + c.name + '"></div>'
+  ).join("");
+  return '<div class="tab-edit-popover" data-label-id="' + l.id + '">' +
+    '<input type="text" class="name" placeholder="Tab name" value="' + escapeAttr(l.name) + '">' +
+    '<div class="swatches">' + swatches + '</div>' +
+    '<button class="delete-btn" data-action="delete-tab" data-label-id="' + l.id + '">Delete tab</button>' +
+  '</div>';
+}
+
+function renderTabs() {
+  const tabsEl = document.getElementById("tabs");
+  let todayOpen = 0;
+  state.projects.forEach(p => p.actionables.forEach(a => {
+    if (!a.done && a.status === "today") todayOpen++;
+  }));
+
+  let html = '';
+  html += '<div class="tab-wrap">' +
+    '<button class="tab' + (currentView === "today" ? " active" : "") + '" data-view="today">' +
+      '<span class="tab-name">Today</span> <span class="pill">' + todayOpen + '</span>' +
+    '</button>' +
+  '</div>';
+
+  if (state.labels.length === 0 && state.projects.length > 0) {
+    html += '<div class="tab-wrap">' +
+      '<button class="tab' + (currentView === "all" ? " active" : "") + '" data-view="all">' +
+        '<span class="tab-name">Projects</span> <span class="pill">' + state.projects.length + '</span>' +
+      '</button>' +
+    '</div>';
+  } else {
+    state.labels.forEach(l => {
+      const count = state.projects.filter(p => p.labelId === l.id).length;
+      const isActive = currentView === l.id;
+      const popover = activeTabEditor === l.id ? renderTabEditPopover(l) : '';
+      html += '<div class="tab-wrap">' +
+        '<button class="tab' + (isActive ? " active" : "") + '" data-view="' + l.id + '">' +
+          '<span class="tab-dot" style="background:' + l.color + ';"></span>' +
+          '<span class="tab-name">' + escapeAttr(l.name || "Unnamed") + '</span>' +
+          ' <span class="pill">' + count + '</span>' +
+          '<span class="tab-edit-icon" data-tab-edit="' + l.id + '" title="Edit tab">⋮</span>' +
+        '</button>' +
+        popover +
+      '</div>';
+    });
+    const uncategorized = state.projects.filter(p => !p.labelId).length;
+    if (uncategorized > 0) {
+      html += '<div class="tab-wrap">' +
+        '<button class="tab' + (currentView === "uncategorized" ? " active" : "") + '" data-view="uncategorized">' +
+          '<span class="tab-name">Uncategorized</span> <span class="pill">' + uncategorized + '</span>' +
+        '</button>' +
+      '</div>';
+    }
+  }
+
+  // "+" new tab button
+  html += '<div class="tab-wrap"><button class="tab-add" id="tab-add" title="New tab">+</button></div>';
+
+  tabsEl.innerHTML = html;
+  wireTabs();
+}
+
+function wireTabs() {
+  const tabsEl = document.getElementById("tabs");
+
+  // Tab click → switch view (but not if clicking the edit icon)
+  tabsEl.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', (e) => {
+      if (e.target.closest('[data-tab-edit]')) return;
+      setView(t.dataset.view);
+    });
+    // Drop targets for moving projects between tabs
+    t.addEventListener('dragover', (e) => {
+      if (!Array.from(e.dataTransfer.types).includes("application/x-project")) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      t.classList.add('drag-target');
+    });
+    t.addEventListener('dragleave', () => t.classList.remove('drag-target'));
+    t.addEventListener('drop', (e) => {
+      const projId = e.dataTransfer.getData("application/x-project");
+      if (!projId) return;
+      e.preventDefault();
+      t.classList.remove('drag-target');
+      const view = t.dataset.view;
+      if (view === "today") return;
+      let newLabelId = null;
+      if (view !== "uncategorized" && view !== "all") newLabelId = view;
+      const p = findProject(projId);
+      if (!p || p.labelId === newLabelId) return;
+      p.labelId = newLabelId;
+      saveState();
+      renderAll();
+    });
+  });
+
+  // Edit icon click → open editor popover
+  tabsEl.querySelectorAll('[data-tab-edit]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = el.dataset.tabEdit;
+      activeTabEditor = activeTabEditor === id ? null : id;
+      renderTabs();
+      if (activeTabEditor) {
+        setTimeout(() => {
+          const inp = document.querySelector('.tab-edit-popover input.name');
+          if (inp) { inp.focus(); inp.select(); }
+        }, 0);
+      }
+    });
+  });
+
+  // "+" new tab
+  const addBtn = document.getElementById('tab-add');
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const used = state.labels.map(l => l.color);
+      const next = COLOR_PALETTE.find(c => !used.includes(c.hex)) || COLOR_PALETTE[0];
+      const newLabel = { id: uid(), name: "", color: next.hex };
+      state.labels.push(newLabel);
+      currentView = newLabel.id;
+      window.localStorage.setItem("view", currentView);
+      activeTabEditor = newLabel.id;
+      saveState();
+      renderAll();
+      setTimeout(() => {
+        const inp = document.querySelector('.tab-edit-popover input.name');
+        if (inp) inp.focus();
+      }, 0);
+    });
+  }
+
+  // Popover inputs
+  tabsEl.querySelectorAll('.tab-edit-popover input.name').forEach(inp => {
+    inp.addEventListener('click', (e) => e.stopPropagation());
+    inp.addEventListener('input', () => {
+      const id = inp.closest('.tab-edit-popover').dataset.labelId;
+      const l = findLabel(id); if (!l) return;
+      l.name = inp.value;
+      saveState();
+      // Update tab name live without re-rendering the popover (keeps focus)
+      const tabBtn = tabsEl.querySelector('.tab[data-view="' + id + '"] .tab-name');
+      if (tabBtn) tabBtn.textContent = inp.value || "Unnamed";
+    });
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === 'Escape') {
+        activeTabEditor = null;
+        renderTabs();
+      }
+    });
+  });
+  tabsEl.querySelectorAll('.tab-edit-popover .color-swatch').forEach(sw => {
+    sw.addEventListener('click', (e) => {
+      e.stopPropagation();
+      updateLabel(sw.dataset.labelId, "color", sw.dataset.color);
+    });
+  });
+  tabsEl.querySelectorAll('.tab-edit-popover [data-action="delete-tab"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!confirm("Delete this tab? Projects in it will become Uncategorized.")) return;
+      const id = btn.dataset.labelId;
+      state.labels = state.labels.filter(l => l.id !== id);
+      state.projects.forEach(p => { if (p.labelId === id) p.labelId = null; });
+      if (currentView === id) currentView = "today";
+      activeTabEditor = null;
+      saveState();
+      renderAll();
+    });
+  });
+}
 
 // ─── Date header ───────────────────────────────────────
 function renderDateHeader() {
@@ -863,50 +1245,101 @@ function renderDailyDashboard() {
     '<span class="pill-backburner"><strong>' + backburner + '</strong> backburner</span>';
 }
 
-function renderTabPills() {
-  let todayOpen = 0;
-  state.projects.forEach(p => {
-    p.actionables.forEach(a => {
-      if (!a.done && a.status === "today") todayOpen++;
+// ─── Filter bar ────────────────────────────────────────
+function buildDropdownHtml(type, labelText, currentValue, options) {
+  const isOpen = activeFilterDropdown === type;
+  const current = options.find(o => o.value === currentValue) || options[0];
+  const isActive = currentValue !== null;
+
+  let menuHtml = "";
+  if (isOpen) {
+    const opts = options.map(o => {
+      const selected = o.value === currentValue;
+      let valAttr;
+      if (o.value === null) valAttr = "__null__";
+      else valAttr = String(o.value);
+      return '<div class="option' + (selected ? " selected" : "") + '" ' +
+        'data-filter-type="' + type + '" data-filter-value="' + escapeAttr(valAttr) + '">' +
+        (o.color ? '<span class="dot" style="background:' + o.color + ';"></span>' : '') +
+        '<span>' + escapeAttr(o.label) + '</span>' +
+        (selected ? '<span class="check">✓</span>' : '') +
+      '</div>';
+    }).join("");
+    menuHtml = '<div class="filter-dropdown-menu">' + opts + '</div>';
+  }
+
+  return '<div class="filter-dropdown">' +
+    '<button class="filter-dropdown-btn' + (isActive ? " active" : "") + '" data-filter-dropdown="' + type + '">' +
+      (current.color ? '<span class="dot small" style="background:' + current.color + ';"></span>' : '') +
+      '<span class="label">' + labelText + ':</span>' +
+      '<span class="value">' + escapeAttr(current.label) + '</span>' +
+      '<span class="caret">▾</span>' +
+    '</button>' +
+    menuHtml +
+  '</div>';
+}
+
+function renderFilterBar() {
+  const bar = document.getElementById("filter-bar");
+  const fs = state.filters;
+
+  const statusOpts = [
+    { value: null,        label: "All" },
+    { value: "today",     label: "Today",      color: "#ff6b47" },
+    { value: "backburner",label: "Backburner", color: "#888890" },
+    { value: "waiting",   label: "Waiting",    color: "#3b82f6" },
+    { value: "stuck",     label: "Stuck",      color: "#dc2626" },
+    { value: "none",      label: "No status",  color: "#4d4d54" }
+  ];
+  const priorityOpts = [
+    { value: null, label: "All" },
+    { value: 0,    label: "None",   color: "#5c5c64" },
+    { value: 1,    label: "Low",    color: "#3b82f6" },
+    { value: 2,    label: "Medium", color: "#eab308" },
+    { value: 3,    label: "High",   color: "#dc2626" }
+  ];
+  let html = "";
+  html += buildDropdownHtml("status",   "Status",   fs.status,   statusOpts);
+  html += buildDropdownHtml("priority", "Priority", fs.priority, priorityOpts);
+
+  if (isStatusFilterActive() || isPriorityFilterActive()) {
+    html += '<button class="filter-clear" id="filter-clear-btn">Clear filters</button>';
+  }
+  bar.innerHTML = html;
+
+  bar.querySelectorAll('.filter-dropdown-btn').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const type = btn.dataset.filterDropdown;
+      activeFilterDropdown = activeFilterDropdown === type ? null : type;
+      renderFilterBar();
     });
   });
-  document.getElementById("today-pill").textContent = todayOpen;
-  document.getElementById("projects-pill").textContent = state.projects.length;
+  bar.querySelectorAll('.filter-dropdown-menu .option').forEach(opt => {
+    opt.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const type = opt.dataset.filterType;
+      let val = opt.dataset.filterValue;
+      if (val === "__null__") val = null;
+      else if (type === "priority") val = parseInt(val);
+      setFilter(type, val);
+      activeFilterDropdown = null;
+      renderFilterBar();
+      if (currentView === "today") renderToday();
+      else renderProjects();
+    });
+  });
+  const clearBtn = document.getElementById("filter-clear-btn");
+  if (clearBtn) clearBtn.addEventListener("click", clearFilters);
 }
 
-// ─── Render: Labels panel ─────────────────────────────
-function renderLabelsPanel() {
-  const list = document.getElementById("labels-list");
-  if (state.labels.length === 0) {
-    list.innerHTML = '<div class="empty-line" style="text-align:center; padding:8px 0;">No labels yet — hit "+ New label" to add one</div>';
-    return;
+document.addEventListener("click", (e) => {
+  if (activeFilterDropdown && !e.target.closest(".filter-dropdown")) {
+    activeFilterDropdown = null;
+    renderFilterBar();
   }
-  list.innerHTML = state.labels.map(l => {
-    const swatches = COLOR_PALETTE.map(c =>
-      '<div class="color-swatch ' + (l.color === c.hex ? "selected" : "") + '" ' +
-        'data-color="' + c.hex + '" data-label-id="' + l.id + '" ' +
-        'style="background:' + c.hex + ';" title="' + c.name + '"></div>'
-    ).join("");
-    return (
-      '<div class="label-row" data-label-id="' + l.id + '">' +
-        '<input type="text" class="label-name" data-label-id="' + l.id + '" ' +
-          'placeholder="Label name (e.g. Work)" value="' + escapeAttr(l.name) + '">' +
-        '<div class="color-swatches">' + swatches + '</div>' +
-        '<button class="li-rm" data-label-id="' + l.id + '" title="Delete label">×</button>' +
-      '</div>'
-    );
-  }).join("");
+});
 
-  list.querySelectorAll('input.label-name').forEach(inp => {
-    inp.addEventListener("input", () => updateLabel(inp.dataset.labelId, "name", inp.value));
-  });
-  list.querySelectorAll('.color-swatch').forEach(sw => {
-    sw.addEventListener("click", () => updateLabel(sw.dataset.labelId, "color", sw.dataset.color));
-  });
-  list.querySelectorAll('.li-rm').forEach(rm => {
-    rm.addEventListener("click", () => deleteLabel(rm.dataset.labelId));
-  });
-}
 
 // ─── Render: Projects view ─────────────────────────────
 function renderProjects() {
@@ -919,55 +1352,48 @@ function renderProjects() {
       '</div>';
     return;
   }
+  const inView = projectsInCurrentView();
+  if (inView.length === 0) {
+    const viewName =
+      currentView === "all" ? "this view" :
+      currentView === "uncategorized" ? "Uncategorized" :
+      (findLabel(currentView) || {}).name || "this category";
+    container.innerHTML =
+      '<div class="empty-state">' +
+        '<h2>No projects in ' + escapeAttr(viewName) + '</h2>' +
+        '<p>Hit <strong>+ New project</strong> to add one here, or drag an existing project onto this tab.</p>' +
+      '</div>';
+    return;
+  }
+  const finalProjects = inView.filter(p => {
+    if (!isItemFilterActive()) return true;
+    return p.actionables.some(a => passesAllItemFilters(a));
+  });
+  if (finalProjects.length === 0) {
+    container.innerHTML =
+      '<div class="empty-state">' +
+        '<h2>No projects match the current filters</h2>' +
+        '<p>Try clearing filters above, or change your filter selection.</p>' +
+      '</div>';
+    return;
+  }
   container.innerHTML = '<div class="projects">' +
-    state.projects.map(renderProject).join("") +
+    finalProjects.map(renderProject).join("") +
     '</div>';
   wireProjects();
   attachDragHandlers();
   applySearchFilter();
 }
 
-function renderLabelChip(p) {
-  const l = findLabel(p.labelId);
-  if (!l) {
-    return '<button class="label-chip unset" data-action="open-label-picker">+ Label</button>';
-  }
-  return (
-    '<button class="label-chip" data-action="open-label-picker" ' +
-      'style="background:' + l.color + '22; color:' + l.color + '; border-color:' + l.color + '55;">' +
-      '<span class="dot" style="background:' + l.color + ';"></span>' +
-      escapeAttr(l.name || "Unnamed") +
-    '</button>'
-  );
-}
-
 function renderProject(p) {
   const l = findLabel(p.labelId);
   const colorAttrs = l ? 'data-label-color="' + l.color + '" style="--proj-color:' + l.color + ';"' : '';
-  const pickerOpen = activeLabelPicker === p.id;
-  let pickerHtml = "";
-  if (pickerOpen) {
-    const options = state.labels.map(ll =>
-      '<div class="picker-option" data-action="set-label" data-label-id="' + ll.id + '">' +
-        '<span class="dot" style="background:' + ll.color + ';"></span>' +
-        '<span>' + escapeAttr(ll.name || "Unnamed") + '</span>' +
-      '</div>'
-    ).join("");
-    pickerHtml =
-      '<div class="label-picker">' +
-        (state.labels.length === 0
-          ? '<div class="picker-option" style="cursor:default; color:var(--text-4);">No labels yet — create one in the Labels panel</div>'
-          : options) +
-        (state.labels.length > 0
-          ? '<div class="picker-divider"></div><div class="picker-option clear" data-action="set-label" data-label-id="">Clear label</div>'
-          : '') +
-      '</div>';
-  }
 
   const active = [];
   const recentDone = [];
   const archived = [];
   p.actionables.forEach(a => {
+    if (isItemFilterActive() && !passesAllItemFilters(a)) return;
     if (!a.done) active.push(a);
     else {
       const age = a.doneAt ? (Date.now() - new Date(a.doneAt).getTime()) : ARCHIVE_AFTER_MS + 1;
@@ -991,10 +1417,6 @@ function renderProject(p) {
       '<button class="delete-btn" data-action="delete-project">Delete</button>' +
       '<div class="proj-header-row">' +
         '<input type="text" class="proj-name" placeholder="Project name" value="' + escapeAttr(p.name) + '">' +
-        '<div style="position:relative;">' +
-          renderLabelChip(p) +
-          pickerHtml +
-        '</div>' +
       '</div>' +
       '<input type="text" class="proj-goal" placeholder="Goal — what does success look like?" value="' + escapeAttr(p.goal) + '">' +
       '<div class="section-head">Actionables ' +
@@ -1118,21 +1540,9 @@ function wireProjects() {
         else expandedDone.add(projId);
         renderProjects();
       }
-      else if (action === "open-label-picker") {
-        activeLabelPicker = activeLabelPicker === projId ? null : projId;
-        activeStatusPicker = null;
-        renderProjects();
-      }
-      else if (action === "set-label") {
-        const labelId = el.dataset.labelId || null;
-        setProjectLabel(projId, labelId);
-        activeLabelPicker = null;
-        renderProjects();
-      }
       else if (action === "open-status-picker") {
         const key = projId + ":" + itemId;
         activeStatusPicker = activeStatusPicker === key ? null : key;
-        activeLabelPicker = null;
         renderProjects();
       }
       else if (action === "set-status") {
@@ -1199,13 +1609,13 @@ function wireProjects() {
 }
 
 document.addEventListener("click", (e) => {
-  if (activeLabelPicker && !e.target.closest('.label-picker') && !e.target.closest('[data-action="open-label-picker"]')) {
-    activeLabelPicker = null;
-    renderProjects();
-  }
   if (activeStatusPicker && !e.target.closest('.status-picker') && !e.target.closest('[data-action="open-status-picker"]')) {
     activeStatusPicker = null;
     renderProjects();
+  }
+  if (activeTabEditor && !e.target.closest('.tab-edit-popover') && !e.target.closest('[data-tab-edit]') && !e.target.closest('#tab-add')) {
+    activeTabEditor = null;
+    renderTabs();
   }
 });
 
@@ -1338,20 +1748,89 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ─── Today tab stats ───────────────────────────────────
+function calcTotalTodayTasks() {
+  let count = 0;
+  state.projects.forEach(p => {
+    p.actionables.forEach(a => {
+      if (a.status === "today") count++;
+    });
+  });
+  return count;
+}
+
+function calcHighPriorityTodayTasks() {
+  let count = 0;
+  state.projects.forEach(p => {
+    p.actionables.forEach(a => {
+      if (a.status === "today" && a.priority === 3) count++;
+    });
+  });
+  return count;
+}
+
+function calcHighPriorityDoneThisWeek() {
+  // Calendar week starting Sunday at 00:00 local time
+  const sunday = new Date();
+  sunday.setHours(0, 0, 0, 0);
+  sunday.setDate(sunday.getDate() - sunday.getDay());
+  const sundayMs = sunday.getTime();
+  let count = 0;
+  state.projects.forEach(p => {
+    p.actionables.forEach(a => {
+      if (!a.done) return;
+      if (a.priority !== 3) return;
+      if (!a.doneAt) return;
+      if (new Date(a.doneAt).getTime() < sundayMs) return;
+      count++;
+    });
+  });
+  return count;
+}
+
+function renderTodayStats() {
+  const total = calcTotalTodayTasks();
+  const high  = calcHighPriorityTodayTasks();
+  const done  = calcHighPriorityDoneThisWeek();
+  return '<div class="today-stats">' +
+    '<div class="today-stat">' +
+      '<div class="lbl">Today tasks</div>' +
+      '<div class="val">' + total + '</div>' +
+      '<div class="sub">total in Today</div>' +
+    '</div>' +
+    '<div class="today-stat high">' +
+      '<div class="lbl">High priority today</div>' +
+      '<div class="val">' + high + '</div>' +
+      '<div class="sub">of ' + total + ' total</div>' +
+    '</div>' +
+    '<div class="today-stat good">' +
+      '<div class="lbl">High priority done this week</div>' +
+      '<div class="val">' + done + '</div>' +
+      '<div class="sub">since Sunday</div>' +
+    '</div>' +
+  '</div>';
+}
+
 // ─── Render: Today view ────────────────────────────────
 function renderToday() {
   const container = document.getElementById("today-list-container");
+
+  // Always render stats at the top
+  const statsHtml = renderTodayStats();
+
   const groups = [];
   state.projects.forEach(p => {
-    const items = p.actionables.filter(a => a.status === "today");
+    let items = p.actionables.filter(a => a.status === "today");
+    if (isItemFilterActive()) items = items.filter(passesAllItemFilters);
     if (items.length) groups.push({ project: p, items });
   });
 
   if (groups.length === 0) {
-    container.innerHTML =
+    const filtered = isItemFilterActive();
+    container.innerHTML = statsHtml +
       '<div class="empty-state">' +
-        '<h2>Nothing on today</h2>' +
-        '<p>Open the Projects tab and set an actionable\'s status to <strong>Today</strong>.</p>' +
+        '<h2>' + (filtered ? "Nothing matches the current filters" : "Nothing on today") + '</h2>' +
+        '<p>' + (filtered ? "Try clearing filters above." : "Open the Projects tab and set an actionable\'s status to <strong>Today</strong>.") + '</p>' +
       '</div>';
     return;
   }
@@ -1360,7 +1839,7 @@ function renderToday() {
     g.items.sort((x, y) => (x.done === y.done ? 0 : x.done ? 1 : -1));
   });
 
-  container.innerHTML = groups.map(g => {
+  container.innerHTML = statsHtml + groups.map(g => {
     const openCount = g.items.filter(i => !i.done).length;
     const l = findLabel(g.project.labelId);
     const labelChip = l ?
@@ -1419,7 +1898,17 @@ function wireTodayView() {
 function renderAll() {
   renderDateHeader();
   renderDailyDashboard();
-  renderTabPills();
+  renderFilterBar();
+  renderTabs();
+  // Re-validate currentView in case labels/projects changed
+  const valid = validViews();
+  if (!valid.has(currentView)) {
+    currentView = "today";
+    window.localStorage.setItem("view", currentView);
+    renderTabs();
+  }
+  document.getElementById('today-view').style.display = currentView === 'today' ? 'block' : 'none';
+  document.getElementById('projects-view').style.display = currentView !== 'today' ? 'block' : 'none';
   if (currentView === "today") renderToday();
   else renderProjects();
 }
@@ -1470,8 +1959,7 @@ function importDataFromFile(file) {
       });
       saveState();
       renderAll();
-      renderLabelsPanel();
-      alert("✓ Imported " + state.projects.length + " projects, " + state.labels.length + " labels");
+      alert("✓ Imported " + state.projects.length + " projects, " + state.labels.length + " tabs");
     } catch (err) {
       alert("Couldn't read that file: " + err.message);
     }
@@ -1485,20 +1973,10 @@ document.getElementById("import-file").addEventListener("change", (e) => {
   e.target.value = "";
 });
 
-// ─── Labels panel toggle ───────────────────────────────
-document.getElementById("labels-btn").addEventListener("click", () => {
-  const panel = document.getElementById("labels-panel");
-  panel.classList.toggle("hidden");
-  if (!panel.classList.contains("hidden")) renderLabelsPanel();
-});
-document.getElementById("add-label-btn").addEventListener("click", addLabel);
-
 // ─── Init ──────────────────────────────────────────────
 document.getElementById("new-project").addEventListener("click", () => {
-  setView("projects");
   addProject();
 });
-renderLabelsPanel();
 setView(currentView);
 </script>
 
