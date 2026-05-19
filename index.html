@@ -39,28 +39,164 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.45;
-  padding: 24px 20px 60px;
-  max-width: 980px;
-  margin: 0 auto;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  display: flex;
+  min-height: 100vh;
 }
 
-/* Header */
-header {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  margin-bottom: 14px; gap: 12px; flex-wrap: wrap;
+/* ── Sidebar ── */
+.sidebar {
+  width: 240px;
+  background: #16161a;
+  border-right: 1px solid var(--border);
+  padding: 22px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
 }
-header h1 {
+.sidebar-header { padding: 0 10px; margin-bottom: 18px; }
+.sidebar-header h1 {
   font-family: var(--font-serif);
-  font-size: 30px; font-weight: 600;
+  font-size: 28px; font-weight: 600;
   letter-spacing: -0.02em;
-  font-variation-settings: "opsz" 96;
+  font-variation-settings: "opsz" 72;
   line-height: 1.05;
 }
-header .date { font-size: 12px; color: var(--text-3); margin-top: 4px; font-weight: 500; }
-.header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sidebar-date {
+  font-size: 11px; color: var(--text-3);
+  margin-top: 4px; font-weight: 500;
+}
+.sidebar-tabs {
+  display: flex; flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  overflow-y: auto;
+  margin: 0 -2px;
+  padding: 0 2px;
+}
+.sidebar-tab-wrap { position: relative; }
+.sidebar-tab {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer; font-size: 13px;
+  color: var(--text-2);
+  background: transparent;
+  border: none;
+  width: 100%;
+  font-family: inherit;
+  text-align: left;
+}
+.sidebar-tab:hover { background: var(--card-hover); color: var(--text); }
+.sidebar-tab.active { background: var(--card); color: var(--text); font-weight: 600; }
+.sidebar-tab.drag-target { background: rgba(255, 107, 71, 0.18); color: var(--text); }
+.sidebar-tab .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.sidebar-tab .name {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sidebar-tab .pill {
+  background: rgba(255, 255, 255, 0.06); color: var(--text-3);
+  padding: 1px 7px; border-radius: 8px; font-size: 10px;
+  font-variant-numeric: tabular-nums; font-weight: 600;
+  flex-shrink: 0;
+}
+.sidebar-tab.active .pill { background: var(--accent); color: var(--bg); }
+.sidebar-tab .edit-icon {
+  display: none; color: var(--text-4); font-size: 14px;
+  padding: 0 2px; line-height: 1; flex-shrink: 0;
+}
+.sidebar-tab:hover .edit-icon, .sidebar-tab.active .edit-icon { display: inline-block; }
+.sidebar-tab .edit-icon:hover { color: var(--text); }
+.sidebar-add {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer; font-size: 13px;
+  color: var(--text-4);
+  background: transparent;
+  border: 1px dashed transparent;
+  font-family: inherit;
+  width: 100%; text-align: left;
+  margin-top: 6px;
+}
+.sidebar-add:hover {
+  color: var(--accent);
+  border-color: var(--border-strong);
+  background: rgba(255, 107, 71, 0.05);
+}
+.sidebar-add .dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 1px dashed currentColor;
+  background: transparent;
+  flex-shrink: 0;
+}
+.sidebar-footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sidebar-footer .btn {
+  text-align: left;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-3);
+  padding: 7px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+.sidebar-footer .btn:hover { color: var(--text); background: var(--card); }
+
+/* Popover repositioned for sidebar (open to the right) */
+.sidebar-tab-wrap .tab-edit-popover {
+  top: 0; left: calc(100% + 8px); right: auto;
+  margin-top: 0;
+}
+
+/* ── Main column ── */
+.main {
+  flex: 1;
+  padding: 24px 28px 60px;
+  min-width: 0;
+  max-width: 1100px;
+}
+.main-header {
+  display: flex; justify-content: flex-end; align-items: center;
+  gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+}
+
+/* Mobile: stack the layout */
+@media (max-width: 760px) {
+  body { flex-direction: column; }
+  .sidebar {
+    width: 100%; height: auto;
+    border-right: none; border-bottom: 1px solid var(--border);
+    position: relative;
+    padding: 16px 14px;
+  }
+  .sidebar-tabs {
+    flex-direction: row; gap: 4px;
+    overflow-x: auto; overflow-y: visible;
+    padding-bottom: 4px;
+  }
+  .sidebar-tab { width: auto; white-space: nowrap; }
+  .sidebar-add { width: auto; }
+  .sidebar-footer {
+    flex-direction: row; margin-top: 12px; padding-top: 10px;
+  }
+  .main { padding: 18px 18px 60px; max-width: none; }
+  .sidebar-tab-wrap .tab-edit-popover {
+    top: 100%; left: 0; right: auto; margin-top: 6px;
+  }
+}
 
 /* Search */
 .search-wrap { position: relative; }
@@ -690,21 +826,26 @@ ul.items .li-rm:hover { color: var(--bad); }
 </head>
 <body>
 
-<header>
-  <div>
+<aside class="sidebar">
+  <div class="sidebar-header">
     <h1>Slate</h1>
-    <div class="date" id="header-date"></div>
+    <div class="sidebar-date" id="header-date"></div>
   </div>
-  <div class="header-actions">
+  <div class="sidebar-tabs" id="tabs"></div>
+  <div class="sidebar-footer">
     <input type="file" id="import-file" accept=".json" style="display:none;">
-    <div class="search-wrap">
-      <input type="text" class="search" id="search-input" placeholder="Search projects, actionables…">
-      <kbd>⌘K</kbd>
-    </div>
-    <button class="btn ghost" id="import-btn" title="Import projects from JSON">Import</button>
-    <button class="btn ghost" id="export-btn" title="Export projects as JSON">Export</button>
-    <button class="btn accent" id="new-project">+ New project</button>
+    <button class="btn" id="import-btn" title="Import projects from JSON">Import</button>
+    <button class="btn" id="export-btn" title="Export projects as JSON">Export</button>
   </div>
+</aside>
+
+<main class="main">
+<header class="main-header">
+  <div class="search-wrap">
+    <input type="text" class="search" id="search-input" placeholder="Search projects, actionables…">
+    <kbd>⌘K</kbd>
+  </div>
+  <button class="btn accent" id="new-project">+ New project</button>
 </header>
 
 <div class="daily-dashboard" id="daily-dashboard">
@@ -719,8 +860,6 @@ ul.items .li-rm:hover { color: var(--bad); }
   <div class="dd-quick" id="dd-quick"></div>
 </div>
 
-<div class="tabs" id="tabs"></div>
-
 <div class="filter-bar" id="filter-bar"></div>
 
 <div id="today-view" style="display:none;">
@@ -730,6 +869,7 @@ ul.items .li-rm:hover { color: var(--bad); }
 <div id="projects-view">
   <div id="projects-container"></div>
 </div>
+</main>
 
 <script>
 // ─── Status definitions ────────────────────────────────
@@ -1049,16 +1189,21 @@ function renderTabs() {
   }));
 
   let html = '';
-  html += '<div class="tab-wrap">' +
-    '<button class="tab' + (currentView === "today" ? " active" : "") + '" data-view="today">' +
-      '<span class="tab-name">Today</span> <span class="pill">' + todayOpen + '</span>' +
+  // Today (no color dot — it's the universal view)
+  html += '<div class="sidebar-tab-wrap">' +
+    '<button class="sidebar-tab' + (currentView === "today" ? " active" : "") + '" data-view="today">' +
+      '<span class="dot" style="background:transparent;"></span>' +
+      '<span class="name">Today</span>' +
+      '<span class="pill">' + todayOpen + '</span>' +
     '</button>' +
   '</div>';
 
   if (state.labels.length === 0 && state.projects.length > 0) {
-    html += '<div class="tab-wrap">' +
-      '<button class="tab' + (currentView === "all" ? " active" : "") + '" data-view="all">' +
-        '<span class="tab-name">Projects</span> <span class="pill">' + state.projects.length + '</span>' +
+    html += '<div class="sidebar-tab-wrap">' +
+      '<button class="sidebar-tab' + (currentView === "all" ? " active" : "") + '" data-view="all">' +
+        '<span class="dot" style="background:var(--text-4);"></span>' +
+        '<span class="name">Projects</span>' +
+        '<span class="pill">' + state.projects.length + '</span>' +
       '</button>' +
     '</div>';
   } else {
@@ -1066,28 +1211,33 @@ function renderTabs() {
       const count = state.projects.filter(p => p.labelId === l.id).length;
       const isActive = currentView === l.id;
       const popover = activeTabEditor === l.id ? renderTabEditPopover(l) : '';
-      html += '<div class="tab-wrap">' +
-        '<button class="tab' + (isActive ? " active" : "") + '" data-view="' + l.id + '">' +
-          '<span class="tab-dot" style="background:' + l.color + ';"></span>' +
-          '<span class="tab-name">' + escapeAttr(l.name || "Unnamed") + '</span>' +
-          ' <span class="pill">' + count + '</span>' +
-          '<span class="tab-edit-icon" data-tab-edit="' + l.id + '" title="Edit tab">⋮</span>' +
+      html += '<div class="sidebar-tab-wrap">' +
+        '<button class="sidebar-tab' + (isActive ? " active" : "") + '" data-view="' + l.id + '">' +
+          '<span class="dot" style="background:' + l.color + ';"></span>' +
+          '<span class="name">' + escapeAttr(l.name || "Unnamed") + '</span>' +
+          '<span class="pill">' + count + '</span>' +
+          '<span class="edit-icon" data-tab-edit="' + l.id + '" title="Edit tab">⋮</span>' +
         '</button>' +
         popover +
       '</div>';
     });
     const uncategorized = state.projects.filter(p => !p.labelId).length;
     if (uncategorized > 0) {
-      html += '<div class="tab-wrap">' +
-        '<button class="tab' + (currentView === "uncategorized" ? " active" : "") + '" data-view="uncategorized">' +
-          '<span class="tab-name">Uncategorized</span> <span class="pill">' + uncategorized + '</span>' +
+      html += '<div class="sidebar-tab-wrap">' +
+        '<button class="sidebar-tab' + (currentView === "uncategorized" ? " active" : "") + '" data-view="uncategorized">' +
+          '<span class="dot" style="background:var(--text-4);"></span>' +
+          '<span class="name">Uncategorized</span>' +
+          '<span class="pill">' + uncategorized + '</span>' +
         '</button>' +
       '</div>';
     }
   }
 
-  // "+" new tab button
-  html += '<div class="tab-wrap"><button class="tab-add" id="tab-add" title="New tab">+</button></div>';
+  // "+ New tab" button
+  html += '<button class="sidebar-add" id="tab-add" title="New tab">' +
+    '<span class="dot"></span>' +
+    '<span class="name">New tab</span>' +
+  '</button>';
 
   tabsEl.innerHTML = html;
   wireTabs();
@@ -1097,7 +1247,7 @@ function wireTabs() {
   const tabsEl = document.getElementById("tabs");
 
   // Tab click → switch view (but not if clicking the edit icon)
-  tabsEl.querySelectorAll('.tab').forEach(t => {
+  tabsEl.querySelectorAll('.sidebar-tab').forEach(t => {
     t.addEventListener('click', (e) => {
       if (e.target.closest('[data-tab-edit]')) return;
       setView(t.dataset.view);
