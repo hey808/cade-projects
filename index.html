@@ -11,22 +11,22 @@
 :root {
   color-scheme: dark;
 
-  /* Cool mode (default) — Claude-style warm dark grey + sage accent */
-  --bg: #14110D;
-  --bg-deep: #0C0B09;
-  --card: #1E1A16;
-  --card-hover: #28231E;
-  --border: #322D27;
-  --border-strong: #4A453E;
-  --leather: #6E6760;
-  --text: #ECE6DB;
-  --text-2: #B6AFA3;
+  /* Cool mode (default) — Midnight Ink: deep blue-black + paper cream */
+  --bg: #0F1216;
+  --bg-deep: #0A0C10;
+  --card: #181C22;
+  --card-hover: #232830;
+  --border: #2A2F38;
+  --border-strong: #3B414C;
+  --leather: #6c6660;
+  --text: #ECE3CC;
+  --text-2: #B6AEA2;
   --text-3: #837E73;
   --text-4: #56524B;
   --good: #22c55e;
   --warn: #eab308;
   --bad:  #dc2626;
-  --accent: #95B086;
+  --accent: #ff6b47;
   --waiting: #3b82f6;
   --backburner: #888890;
   --prio-high: #dc2626;
@@ -153,7 +153,7 @@ body > * { position: relative; z-index: 1; }
 }
 .sidebar-tab:hover { background: var(--card-hover); color: var(--text); }
 .sidebar-tab.active { background: var(--card); color: var(--text); font-weight: 600; }
-.sidebar-tab.drag-target { background: rgba(149, 176, 134, 0.18); color: var(--text); }
+.sidebar-tab.drag-target { background: rgba(255, 107, 71, 0.18); color: var(--text); }
 .sidebar-tab.dragging { opacity: 0.4; }
 .sidebar-tab[draggable="true"] { cursor: grab; }
 .sidebar-tab[draggable="true"]:active { cursor: grabbing; }
@@ -190,7 +190,7 @@ body > * { position: relative; z-index: 1; }
 .sidebar-add:hover {
   color: var(--accent);
   border-color: var(--border-strong);
-  background: rgba(149, 176, 134, 0.05);
+  background: rgba(255, 107, 71, 0.05);
 }
 .sidebar-add .dot {
   width: 9px; height: 9px; border-radius: 50%;
@@ -303,8 +303,8 @@ input.search:focus + kbd { display: none; }
 /* Wind-down hero section — circle on left, text right-justified */
 .wind-down {
   position: relative;
-  background: linear-gradient(135deg, rgba(149,176,134,0.14), rgba(149,176,134,0.02));
-  border: 1px solid rgba(149, 176, 134, 0.35);
+  background: linear-gradient(135deg, rgba(255,107,71,0.14), rgba(255,107,71,0.02));
+  border: 1px solid rgba(255, 107, 71, 0.35);
   border-radius: 12px;
   padding: 16px 22px;
   display: flex; flex-direction: row; align-items: center;
@@ -314,7 +314,7 @@ input.search:focus + kbd { display: none; }
   transition: border-color 0.15s, background 0.15s;
   min-height: 100px;
 }
-.wind-down:hover { border-color: rgba(149, 176, 134, 0.55); }
+.wind-down:hover { border-color: rgba(255, 107, 71, 0.55); }
 .wind-down .wd-circle { flex-shrink: 0; }
 .wind-down .wd-text {
   display: flex; flex-direction: column; align-items: flex-end;
@@ -400,7 +400,7 @@ input.search:focus + kbd { display: none; }
 .deep-corner-btn {
   position: absolute; top: 10px; right: 12px;
   background: transparent;
-  border: 1px solid rgba(149,176,134,0.32);
+  border: 1px solid rgba(255,107,71,0.32);
   color: var(--accent);
   padding: 4px 10px; border-radius: 5px;
   font-family: inherit; font-size: 10px; font-weight: 700;
@@ -408,8 +408,8 @@ input.search:focus + kbd { display: none; }
   cursor: pointer;
 }
 .deep-corner-btn:hover {
-  background: rgba(149,176,134,0.12);
-  border-color: rgba(149,176,134,0.55);
+  background: rgba(255,107,71,0.12);
+  border-color: rgba(255,107,71,0.55);
 }
 .deep-corner-btn.end {
   border-color: rgba(255,255,255,0.18);
@@ -427,7 +427,7 @@ input.search:focus + kbd { display: none; }
   color: var(--accent);
   border: 1px solid var(--accent);
 }
-.btn.accent.ending:hover { background: rgba(149,176,134,0.10); }
+.btn.accent.ending:hover { background: rgba(255,107,71,0.10); }
 
 .deep-circles {
   display: inline-flex; align-items: center; gap: 6px;
@@ -567,18 +567,18 @@ input.search:focus + kbd { display: none; }
   font-size: 16px;
   letter-spacing: -0.01em;
   color: var(--accent);
-  background: rgba(149, 176, 134, 0.05);
-  border: 1px solid rgba(149, 176, 134, 0.18);
+  background: rgba(255, 107, 71, 0.05);
+  border: 1px solid rgba(255, 107, 71, 0.18);
   padding: 10px 12px;
 }
 .sidebar-tab.journal-tab:hover {
-  background: rgba(149, 176, 134, 0.10);
-  border-color: rgba(149, 176, 134, 0.32);
+  background: rgba(255, 107, 71, 0.10);
+  border-color: rgba(255, 107, 71, 0.32);
   color: var(--accent);
 }
 .sidebar-tab.journal-tab.active {
-  background: rgba(149, 176, 134, 0.16);
-  border-color: rgba(149, 176, 134, 0.45);
+  background: rgba(255, 107, 71, 0.16);
+  border-color: rgba(255, 107, 71, 0.45);
   color: var(--accent);
 }
 .sidebar-tab.home-tab {
@@ -693,7 +693,7 @@ input.search:focus + kbd { display: none; }
   background: var(--accent); color: #0a0a0a;
   border-color: var(--accent);
 }
-.journal-nav .nav-btn.primary:hover { background: #A6BF96; }
+.journal-nav .nav-btn.primary:hover { background: #ff7a59; }
 
 /* Hide the daily-dashboard / wind-down / filter bar / page header when
    the journal tab is open — keeps the focus on just the writing. */
@@ -814,8 +814,8 @@ body.journal-mode .filter-bar { display: none !important; }
 
 /* Daily progress dashboard — date on left, circular progress on right */
 .daily-dashboard {
-  background: linear-gradient(135deg, #2a2926 0%, var(--bg) 100%);
-  border: 1px solid rgba(149, 176, 134, 0.28);
+  background: linear-gradient(135deg, #1f2026 0%, var(--bg) 100%);
+  border: 1px solid rgba(255, 107, 71, 0.28);
   border-radius: 12px;
   padding: 16px 22px;
   display: flex; flex-direction: row; align-items: center;
@@ -881,7 +881,7 @@ body.journal-mode .filter-bar { display: none !important; }
 .tab.active .pill { background: var(--accent); color: #0a0a0a; }
 .tab .tab-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 .tab.drag-target {
-  background: rgba(149, 176, 134, 0.15);
+  background: rgba(255, 107, 71, 0.15);
   border-radius: 6px 6px 0 0;
 }
 .tab-wrap { position: relative; display: inline-flex; align-items: center; }
@@ -903,7 +903,7 @@ body.journal-mode .filter-bar { display: none !important; }
   margin-bottom: -1px;
   align-self: stretch;
 }
-.tab-add:hover { border-color: var(--accent); color: var(--accent); background: rgba(149, 176, 134, 0.08); }
+.tab-add:hover { border-color: var(--accent); color: var(--accent); background: rgba(255, 107, 71, 0.08); }
 
 .tab-edit-popover {
   position: absolute; top: 100%; left: 0;
@@ -1033,7 +1033,7 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 .btn:hover { background: var(--text-2); }
 .btn.accent { background: var(--accent); color: #0a0a0a; }
-.btn.accent:hover { background: #A6BF96; }
+.btn.accent:hover { background: #fbbf24; }
 .btn.ghost {
   background: transparent; border: 1px solid var(--border-strong);
   color: var(--text-2); padding: 5px 10px; font-size: 11px;
@@ -1280,7 +1280,7 @@ ul.items > li::after  { bottom: -1px; }
 ul.items > li.drag-over-above::before { opacity: 1; }
 ul.items > li.drag-over-below::after  { opacity: 1; }
 ul.items > li.drag-over-nest > .item-row {
-  background: rgba(149, 176, 134, 0.10);
+  background: rgba(255, 107, 71, 0.10);
   outline: 1px dashed var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
@@ -1376,7 +1376,7 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
   border-color: var(--border-strong);
 }
 .status-chip.unset:hover { color: var(--text-2); border-color: var(--border); }
-.status-chip.today      { background: rgba(149, 176, 134, 0.18); color: var(--accent);     border-color: var(--accent); }
+.status-chip.today      { background: rgba(255, 107, 71, 0.18); color: var(--accent);     border-color: var(--accent); }
 .status-chip.backburner { background: rgba(113, 113, 122, 0.18); color: var(--text-2);    border-color: var(--text-3); }
 .status-chip.waiting    { background: rgba(59, 130, 246, 0.15);  color: var(--waiting);   border-color: var(--waiting); }
 .status-chip.stuck      { background: rgba(239, 68, 68, 0.15);   color: var(--bad);       border-color: var(--bad); }
@@ -1515,8 +1515,8 @@ ul.items li:hover .row-tool { opacity: 1; }
 /* Keystone — the "one thing today" card at the top of Home */
 .keystone-card {
   background:
-    linear-gradient(135deg, rgba(149,176,134,0.10), rgba(149,176,134,0.02));
-  border: 1px solid rgba(149,176,134,0.30);
+    linear-gradient(135deg, rgba(255,107,71,0.10), rgba(255,107,71,0.02));
+  border: 1px solid rgba(255,107,71,0.30);
   border-radius: 12px;
   padding: 16px 18px;
   margin-bottom: 18px;
@@ -1885,7 +1885,7 @@ try {
 // ─── Status definitions ────────────────────────────────
 const STATUSES = ["today", "backburner", "waiting", "stuck"];
 const STATUS_META = {
-  today:      { label: "Today",      color: "#95B086" },
+  today:      { label: "Today",      color: "#ff6b47" },
   backburner: { label: "Backburner", color: "#888890" },
   waiting:    { label: "Waiting",    color: "#3b82f6" },
   stuck:      { label: "Stuck",      color: "#dc2626" }
@@ -3299,7 +3299,7 @@ function renderFilterBar() {
 
   const statusOpts = [
     { value: null,        label: "All" },
-    { value: "today",     label: "Today",      color: "#95B086" },
+    { value: "today",     label: "Today",      color: "#ff6b47" },
     { value: "backburner",label: "Backburner", color: "#888890" },
     { value: "waiting",   label: "Waiting",    color: "#3b82f6" },
     { value: "stuck",     label: "Stuck",      color: "#dc2626" },
