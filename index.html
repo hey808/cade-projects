@@ -435,59 +435,53 @@ input.search:focus + kbd { display: none; }
 }
 .journal-nav .nav-btn.primary:hover { background: #ff7a59; }
 
-/* ── Cream "paper" mode for the Morning Journal tab ────────────────
-   When body has .journal-mode, we hide the daily-dashboard/wind-down hero
-   row, the filter bar, and the top header — and switch the right-hand
-   pane to a warm cream theme so the journal feels like a notebook. */
-body.journal-mode header,
-body.journal-mode .hero-row,
-body.journal-mode .filter-bar { display: none !important; }
-
-body.journal-mode main {
-  background: #f3e7c8;
-  color: #2a2218;
-  transition: background 0.2s;
+/* Journal review (read-only summary shown after submit) */
+.journal-review {
+  max-width: 720px; margin: 0 auto;
 }
-body.journal-mode #journal-view {
-  padding-top: 48px;
-  padding-bottom: 56px;
+.journal-review .review-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
 }
-body.journal-mode .journal-card .question {
-  color: #2a2218;
+.journal-review .review-head h2 {
+  font-family: var(--font-serif); font-weight: 500;
+  font-size: 26px; letter-spacing: -0.02em; color: var(--text);
+  font-variation-settings: "opsz" 60;
 }
-body.journal-mode .journal-card textarea {
-  background: #efe1bc;
-  border: 1px solid #d8c89e;
-  color: #2a2218;
+.journal-review .review-head .review-sub {
+  font-size: 13px; color: var(--text-3);
 }
-body.journal-mode .journal-card textarea:focus {
-  border-color: var(--accent);
-  background: #efe2c0;
+.journal-review .entry {
+  margin-bottom: 22px;
+  padding: 16px 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
 }
-body.journal-mode .journal-card textarea::placeholder {
-  color: #a8946a;
+.journal-review .entry .q {
+  font-family: var(--font-serif); font-weight: 500;
+  font-size: 17px; line-height: 1.35; letter-spacing: -0.01em;
+  color: var(--accent);
+  margin-bottom: 8px;
 }
-body.journal-mode .journal-stepper .step {
-  border-color: #b9a47a;
+.journal-review .entry .a {
+  font-size: 14px; line-height: 1.6;
+  color: var(--text);
+  white-space: pre-wrap; word-break: break-word;
 }
-body.journal-mode .journal-stepper .step:hover { border-color: #7a6948; }
-body.journal-mode .journal-stepper .step.active,
-body.journal-mode .journal-stepper .step.filled {
-  background: var(--accent); border-color: var(--accent);
+.journal-review .entry .a.empty {
+  color: var(--text-4); font-style: italic;
 }
-body.journal-mode .journal-nav .nav-btn {
-  border-color: #b9a47a;
-  color: #5a4a30;
+.journal-review .review-actions {
+  display: flex; justify-content: center; gap: 12px;
+  margin-top: 24px;
 }
-body.journal-mode .journal-nav .nav-btn:hover:not(:disabled) {
-  border-color: #7a6948;
-  color: #2a2218;
+.journal-review .review-actions .btn {
+  padding: 9px 18px; font-size: 13px;
 }
-body.journal-mode .journal-nav .nav-btn.primary {
-  background: var(--accent); color: #0a0a0a;
-  border-color: var(--accent);
-}
-body.journal-mode .journal-nav .nav-btn.primary:hover { background: #ff7a59; }
 
 .wind-down-popover {
   position: absolute; top: calc(100% + 6px); right: 0;
@@ -1992,13 +1986,16 @@ function setView(view) {
   if (view === "today") view = "home"; // legacy alias
   const valid = validViews();
   if (!valid.has(view)) view = "home";
+  const prevView = currentView;
   currentView = view;
   window.localStorage.setItem("view", view);
   markPrefsDirty();
+  // Smart default when entering the journal: review if all answered today,
+  // otherwise jump straight to the first empty question.
+  if (view === 'journal' && prevView !== 'journal') initJournalView();
   document.getElementById('journal-view').style.display  = view === 'journal' ? 'block' : 'none';
   document.getElementById('home-view').style.display     = view === 'home'    ? 'block' : 'none';
   document.getElementById('projects-view').style.display = (view !== 'home' && view !== 'journal') ? 'block' : 'none';
-  document.body.classList.toggle('journal-mode', view === 'journal');
   renderAll();
 }
 
@@ -3479,16 +3476,27 @@ function wireHomeView() {
 
 // ─── Render: Morning Journal ──────────────────────────
 const JOURNAL_QUESTIONS = [
-  { key: "q1", text: "What are the highest-leverage activities you can do today?" },
-  { key: "q2", text: "What are the things you're doing that you know you shouldn't?" },
-  { key: "q3", text: "What are the things you're not doing that you know you should?" },
-  { key: "q4", text: "What is the one thing you could accomplish today to consider the day a success?" }
+  { key: "q1", text: "What are things that you're doing poorly or wrong that you could fix?" },
+  { key: "q2", text: "What are things that you're not doing but you could?" },
+  { key: "q3", text: "What's the smallest thing you can do right now to get a win?" }
 ];
-let journalStep = 0; // Index of the currently visible question (0–3)
+let journalStep = 0;           // Currently visible question (0..2)
+let journalReviewMode = false; // After Submit, show read-only review
 
 function getJournalEntry(date) {
   if (!state.journal[date]) state.journal[date] = { q1: "", q2: "", q3: "", q4: "" };
   return state.journal[date];
+}
+function initJournalView() {
+  const entry = getJournalEntry(todayDateString());
+  const filled = JOURNAL_QUESTIONS.map(q => (entry[q.key] || "").trim().length > 0);
+  if (filled.every(Boolean)) {
+    journalReviewMode = true;
+  } else {
+    journalReviewMode = false;
+    const firstEmpty = filled.findIndex(f => !f);
+    journalStep = firstEmpty === -1 ? 0 : firstEmpty;
+  }
 }
 function updateJournal(date, key, value) {
   const e = getJournalEntry(date);
@@ -3502,6 +3510,37 @@ function renderJournal() {
   const container = document.getElementById("journal-container");
   const date = todayDateString();
   const entry = getJournalEntry(date);
+
+  // Review screen — read-only summary shown after Submit
+  if (journalReviewMode) {
+    const today = new Date();
+    const dateLabel = today.toLocaleDateString("en-US", {
+      weekday: "long", month: "long", day: "numeric"
+    });
+    const entries = JOURNAL_QUESTIONS.map(q => {
+      const ans = (entry[q.key] || "").trim();
+      return '<div class="entry">' +
+        '<div class="q">' + q.text + '</div>' +
+        '<div class="a' + (ans ? "" : " empty") + '">' +
+          (ans ? escapeAttr(ans) : "(no answer)") +
+        '</div>' +
+      '</div>';
+    }).join("");
+    container.innerHTML =
+      '<div class="journal-review">' +
+        '<div class="review-head">' +
+          '<h2>Today\'s Journal</h2>' +
+          '<div class="review-sub">' + dateLabel + '</div>' +
+        '</div>' +
+        entries +
+        '<div class="review-actions">' +
+          '<button class="btn ghost" id="journal-edit">Edit answers</button>' +
+        '</div>' +
+      '</div>';
+    wireJournal();
+    return;
+  }
+
   if (journalStep < 0 || journalStep >= JOURNAL_QUESTIONS.length) journalStep = 0;
   const q = JOURNAL_QUESTIONS[journalStep];
   const value = entry[q.key] || "";
@@ -3525,7 +3564,7 @@ function renderJournal() {
       '<div class="journal-nav">' +
         '<button class="nav-btn" id="journal-prev"' + prevDisabled + '>← Previous</button>' +
         '<button class="nav-btn primary" id="journal-next">' +
-          (isLast ? "Done" : "Next →") +
+          (isLast ? "Submit" : "Next →") +
         '</button>' +
       '</div>' +
     '</div>';
@@ -3548,6 +3587,18 @@ function refreshJournalStepper() {
 function wireJournal() {
   const container = document.getElementById("journal-container");
   const date = todayDateString();
+
+  // Review screen wiring
+  const edit = container.querySelector('#journal-edit');
+  if (edit) {
+    edit.addEventListener("click", () => {
+      journalReviewMode = false;
+      journalStep = 0;
+      renderJournal();
+    });
+    return;
+  }
+
   const ta = container.querySelector('#journal-textarea');
   if (ta) {
     ta.addEventListener("input", () => {
@@ -3571,8 +3622,9 @@ function wireJournal() {
     if (journalStep < JOURNAL_QUESTIONS.length - 1) {
       journalStep++; renderJournal();
     } else {
-      // Last question — bounce back to Home
-      setView("home");
+      // Submitting the last answer → flip to read-only review
+      journalReviewMode = true;
+      renderJournal();
     }
   });
 }
@@ -3593,7 +3645,6 @@ function renderAll() {
   document.getElementById('journal-view').style.display  = currentView === 'journal' ? 'block' : 'none';
   document.getElementById('home-view').style.display     = currentView === 'home'    ? 'block' : 'none';
   document.getElementById('projects-view').style.display = (currentView !== 'home' && currentView !== 'journal') ? 'block' : 'none';
-  document.body.classList.toggle('journal-mode', currentView === 'journal');
   if (currentView === "journal")   renderJournal();
   else if (currentView === "home") renderHome();
   else                              renderProjects();
