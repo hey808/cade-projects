@@ -749,8 +749,10 @@ input.search:focus + kbd { display: none; }
 }
 .journal-tasks h3 {
   font-family: var(--font-serif); font-weight: 500;
-  font-size: 18px; color: var(--text);
-  margin-bottom: 12px;
+  font-size: 22px; color: var(--text);
+  margin-bottom: 14px;
+  text-align: center;
+  letter-spacing: -0.01em;
 }
 .journal-task-form {
   background: var(--card);
@@ -4774,11 +4776,11 @@ function renderJournal() {
           '<h2>Today\'s Journal</h2>' +
           '<div class="review-sub">' + dateLabel + '</div>' +
         '</div>' +
-        entries +
         '<div class="journal-tasks">' +
           '<h3>Let\'s Get Started</h3>' +
           creatorHtml +
         '</div>' +
+        entries +
         '<div class="review-actions">' +
           '<button class="btn ghost" id="journal-edit">Edit answers</button>' +
         '</div>' +
