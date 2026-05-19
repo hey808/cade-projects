@@ -239,21 +239,26 @@ input.search:focus + kbd { display: none; }
   .hero-row { grid-template-columns: 1fr; }
 }
 
-/* Wind-down hero section (left half of the hero row) */
+/* Wind-down hero section — circle on left, text right-justified */
 .wind-down {
   position: relative;
   background: linear-gradient(135deg, rgba(255,107,71,0.14), rgba(255,107,71,0.02));
   border: 1px solid rgba(255, 107, 71, 0.35);
   border-radius: 12px;
-  padding: 14px 18px;
-  display: flex; flex-direction: column; justify-content: center;
-  gap: 6px;
+  padding: 16px 22px;
+  display: flex; flex-direction: row; align-items: center;
+  justify-content: space-between;
+  gap: 18px;
   cursor: pointer; user-select: none;
   transition: border-color 0.15s, background 0.15s;
-  min-height: 100%;
+  min-height: 100px;
 }
 .wind-down:hover { border-color: rgba(255, 107, 71, 0.55); }
-.wind-down .wd-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.wind-down .wd-circle { flex-shrink: 0; }
+.wind-down .wd-text {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 2px; min-width: 0; text-align: right;
+}
 .wind-down .wd-label {
   color: var(--accent);
   text-transform: uppercase; letter-spacing: 0.10em;
@@ -549,52 +554,48 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 .wind-down-popover .wd-trigger:hover { color: var(--accent); border-color: var(--accent); }
 
-/* Daily progress dashboard — left half of the hero row.
-   Layout: big date pinned to the left, progress + stats stacked on the right. */
+/* Daily progress dashboard — date on left, circular progress on right */
 .daily-dashboard {
   background: linear-gradient(135deg, #2e2925 0%, #1c1c1e 100%);
   border: 1px solid rgba(255, 107, 71, 0.28);
   border-radius: 12px;
-  padding: 14px 20px;
+  padding: 16px 22px;
   display: flex; flex-direction: row; align-items: center;
+  justify-content: space-between;
   gap: 22px;
+  min-height: 100px;
 }
 .dd-date {
   font-family: var(--font-sans);
-  font-size: 26px; font-weight: 800;
+  font-size: 28px; font-weight: 800;
   color: var(--accent);
   text-transform: uppercase; letter-spacing: 0.04em;
   white-space: nowrap;
   line-height: 1.05;
   flex-shrink: 0;
 }
-.dd-right-col {
-  flex: 1; min-width: 0;
-  display: flex; flex-direction: column; gap: 10px;
+.dd-progress-wrap { flex-shrink: 0; }
+
+/* Circular progress (shared by dashboard + wind-down) */
+.progress-circle { display: block; }
+.progress-circle .pc-bg { stroke: rgba(255,255,255,0.06); }
+.progress-circle .pc-fg {
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.5s ease-out, stroke 0.2s;
 }
-.dd-progress-row {
-  display: flex; align-items: center; gap: 12px;
+.progress-circle .pc-label {
+  font-family: var(--font-sans);
+  fill: var(--text);
+  font-weight: 700;
 }
-.dd-progress-bar {
-  flex: 1; height: 8px; background: rgba(255,255,255,0.05);
-  border-radius: 4px; overflow: hidden;
+.progress-circle .pc-sub {
+  font-family: var(--font-sans);
+  fill: var(--text-3);
+  font-weight: 600;
 }
-.dd-progress-bar > div {
-  height: 100%; background: linear-gradient(90deg, var(--good) 0%, #16a34a 100%);
-  transition: width 0.4s ease-out;
-}
-.dd-progress-label {
-  font-size: 12px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.dd-stats {
-  font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-.dd-stats strong { color: var(--text); font-weight: 600; }
+
 @media (max-width: 720px) {
-  .daily-dashboard { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .dd-stats { text-align: left; }
+  .daily-dashboard { flex-direction: column; align-items: flex-start; gap: 16px; }
 }
 
 /* Tabs */
@@ -1500,13 +1501,7 @@ ul.items li:hover .row-tool { opacity: 1; }
 <div class="hero-row">
   <div class="daily-dashboard" id="daily-dashboard">
     <div class="dd-date" id="dd-date-text"></div>
-    <div class="dd-right-col">
-      <div class="dd-progress-row">
-        <div class="dd-progress-bar"><div id="dd-progress-fill" style="width:0%"></div></div>
-        <div class="dd-progress-label" id="dd-progress-label">—</div>
-      </div>
-      <div class="dd-stats" id="dd-stats"></div>
-    </div>
+    <div class="dd-progress-wrap" id="dd-progress-wrap"></div>
   </div>
   <div id="wind-down-wrap"></div>
 </div>
@@ -1570,8 +1565,10 @@ state.filters = state.filters || {};
 state.keystone = state.keystone || { date: null, text: "", done: false };
 state.windDown = state.windDown || { hour: 20, minute: 0, lastTriggeredDate: null };
 // Backfill in case stored state is older
-if (typeof state.windDown.hour   !== "number") state.windDown.hour = 20;
-if (typeof state.windDown.minute !== "number") state.windDown.minute = 0;
+if (typeof state.windDown.hour       !== "number") state.windDown.hour = 20;
+if (typeof state.windDown.minute     !== "number") state.windDown.minute = 0;
+if (typeof state.windDown.startHour   !== "number") state.windDown.startHour = 8;
+if (typeof state.windDown.startMinute !== "number") state.windDown.startMinute = 0;
 
 // Deep Work session — transient timer that overrides the wind-down card
 state.deepWork = state.deepWork || { active: false, startedAt: null, durationMs: 75 * 60 * 1000 };
@@ -2421,6 +2418,47 @@ function getWindDownTargetToday() {
   t.setHours(state.windDown.hour, state.windDown.minute, 0, 0);
   return t;
 }
+function getDayStartToday() {
+  const t = new Date();
+  t.setHours(state.windDown.startHour || 0, state.windDown.startMinute || 0, 0, 0);
+  return t;
+}
+// 0–1 fraction of the day elapsed between the start time and wind-down time.
+function dayProgressRatio() {
+  const start = getDayStartToday().getTime();
+  const end   = getWindDownTargetToday().getTime();
+  if (end <= start) return 0;
+  const r = (Date.now() - start) / (end - start);
+  return Math.max(0, Math.min(1, r));
+}
+
+// Reusable circular progress SVG (used by dashboard + wind-down)
+function buildProgressCircle(opts) {
+  const size  = opts.size  || 72;
+  const pct   = Math.max(0, Math.min(1, opts.pct || 0));
+  const color = opts.color || 'var(--good)';
+  const label = opts.label != null ? opts.label : "";
+  const sub   = opts.sub   != null ? opts.sub   : "";
+  const r = 16;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - pct);
+  const labelSize = opts.labelSize || 9;
+  const subSize   = opts.subSize   || 5;
+  const labelY = sub ? 17 : 20;
+  const subY   = 24;
+  return '<svg class="progress-circle" viewBox="0 0 36 36" ' +
+    'style="width:' + size + 'px;height:' + size + 'px;">' +
+    '<circle class="pc-bg" cx="18" cy="18" r="' + r + '" fill="none" stroke-width="3"/>' +
+    '<circle class="pc-fg" cx="18" cy="18" r="' + r + '" fill="none" stroke-width="3" ' +
+      'stroke="' + color + '" ' +
+      'stroke-dasharray="' + c.toFixed(2) + '" stroke-dashoffset="' + offset.toFixed(2) + '" ' +
+      'transform="rotate(-90 18 18)"/>' +
+    (label ? '<text class="pc-label" x="18" y="' + labelY + '" text-anchor="middle" ' +
+              'style="font-size:' + labelSize + 'px">' + label + '</text>' : '') +
+    (sub   ? '<text class="pc-sub" x="18" y="' + subY + '" text-anchor="middle" ' +
+              'style="font-size:' + subSize + 'px">' + sub + '</text>' : '') +
+  '</svg>';
+}
 function formatCountdown(ms) {
   if (ms <= 0) return "0h 00m 00s";
   const totalSec = Math.floor(ms / 1000);
@@ -2439,6 +2477,13 @@ function formatTargetLabel() {
   const hh = ((h + 11) % 12) + 1;
   return hh + (m ? ":" + String(m).padStart(2, "0") : "") + ampm;
 }
+function formatStartLabel() {
+  const h = state.windDown.startHour;
+  const m = state.windDown.startMinute;
+  const ampm = h >= 12 ? "pm" : "am";
+  const hh = ((h + 11) % 12) + 1;
+  return hh + (m ? ":" + String(m).padStart(2, "0") : "") + ampm;
+}
 
 function renderWindDown() {
   const wrap = document.getElementById("wind-down-wrap");
@@ -2451,13 +2496,21 @@ function renderWindDown() {
       endDeepWork({ playChime: true });
       return;
     }
+    const dwElapsed = state.deepWork.durationMs - remaining;
+    const dwRatio = dwElapsed / state.deepWork.durationMs;
+    const dwCircle = buildProgressCircle({
+      size: 76, pct: dwRatio, color: 'var(--waiting)',
+      label: Math.round(dwRatio * 100) + "%", sub: "focus",
+      labelSize: 9, subSize: 4.5
+    });
     wrap.innerHTML =
       '<div class="wind-down deep" id="wind-down-btn">' +
-        '<div class="wd-left">' +
+        '<div class="wd-circle">' + dwCircle + '</div>' +
+        '<div class="wd-text">' +
           '<div class="wd-label">Deep Work</div>' +
           '<div class="wd-target">75-minute focus · gentle chime when done</div>' +
+          '<div class="wd-time">' + formatCountdown(remaining) + '</div>' +
         '</div>' +
-        '<div class="wd-time">' + formatCountdown(remaining) + '</div>' +
       '</div>';
     wireWindDown();
     return;
@@ -2467,7 +2520,11 @@ function renderWindDown() {
   const triggeredToday = state.windDown.lastTriggeredDate === today;
   const popover = activeWindDownEditor ? (
     '<div class="wind-down-popover" id="wind-down-popover">' +
-      '<div class="wd-title">Wind-down time</div>' +
+      '<div class="wd-title">Day starts</div>' +
+      '<input type="time" class="wd-time-input" id="wd-start-input" ' +
+        'value="' + String(state.windDown.startHour).padStart(2, "0") + ":" +
+                    String(state.windDown.startMinute).padStart(2, "0") + '">' +
+      '<div class="wd-title" style="margin-top:12px">Wind-down time</div>' +
       '<input type="time" class="wd-time-input" id="wd-time-input" ' +
         'value="' + String(state.windDown.hour).padStart(2, "0") + ":" +
                     String(state.windDown.minute).padStart(2, "0") + '">' +
@@ -2476,14 +2533,24 @@ function renderWindDown() {
     '</div>'
   ) : "";
 
+  // Day-progress ratio drives the orange ring on the wind-down card
+  const dayRatio = dayProgressRatio();
+  const ringColor = dayRatio >= 0.85 ? 'var(--bad)' : 'var(--accent)';
+  const dayCircle = buildProgressCircle({
+    size: 76, pct: dayRatio, color: ringColor,
+    label: Math.round(dayRatio * 100) + "%", sub: "of day",
+    labelSize: 9, subSize: 4.5
+  });
+
   if (triggeredToday) {
     wrap.innerHTML =
       '<div class="wind-down done" id="wind-down-btn" title="Wound down for today">' +
-        '<div class="wd-left">' +
+        '<div class="wd-circle">' + dayCircle + '</div>' +
+        '<div class="wd-text">' +
           '<div class="wd-label">Wind-down complete</div>' +
-          '<div class="wd-target">Triggered at ' + formatTargetLabel() + ' · click to adjust</div>' +
+          '<div class="wd-target">' + formatStartLabel() + " → " + formatTargetLabel() + ' · click to adjust</div>' +
+          '<div class="wd-time">Done</div>' +
         '</div>' +
-        '<div class="wd-time">Done</div>' +
       '</div>' + popover;
     wireWindDown();
     return;
@@ -2495,11 +2562,12 @@ function renderWindDown() {
   wrap.innerHTML =
     '<div class="wind-down' + (urgent ? " urgent" : "") + '" id="wind-down-btn" ' +
       'title="Click to adjust">' +
-      '<div class="wd-left">' +
+      '<div class="wd-circle">' + dayCircle + '</div>' +
+      '<div class="wd-text">' +
         '<div class="wd-label">Time Until Wind-Down</div>' +
-        '<div class="wd-target">at ' + formatTargetLabel() + ' · click to adjust</div>' +
+        '<div class="wd-target">' + formatStartLabel() + ' → ' + formatTargetLabel() + ' · click to adjust</div>' +
+        '<div class="wd-time">' + formatCountdown(ms) + '</div>' +
       '</div>' +
-      '<div class="wd-time">' + formatCountdown(ms) + '</div>' +
     '</div>' + popover;
   wireWindDown();
 }
@@ -2559,6 +2627,21 @@ function wireWindDown() {
     });
     inp.addEventListener("click", (e) => e.stopPropagation());
     inp.addEventListener("mousedown", (e) => e.stopPropagation());
+  }
+  const startInp = document.getElementById("wd-start-input");
+  if (startInp && !startInp.dataset.wired) {
+    startInp.dataset.wired = "1";
+    startInp.addEventListener("change", () => {
+      const parts = startInp.value.split(":");
+      if (parts.length !== 2) return;
+      state.windDown.startHour   = parseInt(parts[0], 10) || 0;
+      state.windDown.startMinute = parseInt(parts[1], 10) || 0;
+      markPrefsDirty();
+      saveState();
+      renderWindDown();
+    });
+    startInp.addEventListener("click", (e) => e.stopPropagation());
+    startInp.addEventListener("mousedown", (e) => e.stopPropagation());
   }
   const trig = document.getElementById("wd-trigger-now");
   if (trig && !trig.dataset.wired) {
@@ -2653,28 +2736,27 @@ function renderDateHeader() {
 // ─── Daily progress dashboard ──────────────────────────
 function renderDailyDashboard() {
   let todayTotal = 0, todayDone = 0;
-  let openTotal = 0, stuck = 0, waiting = 0, backburner = 0;
   state.projects.forEach(p => {
     p.actionables.forEach(a => {
       if (a.status === "today") {
         todayTotal++;
         if (a.done) todayDone++;
       }
-      if (!a.done) {
-        openTotal++;
-        if (a.status === "stuck") stuck++;
-        else if (a.status === "waiting") waiting++;
-        else if (a.status === "backburner") backburner++;
-      }
     });
   });
-  const pct = todayTotal === 0 ? 0 : Math.round((todayDone / todayTotal) * 100);
-  document.getElementById("dd-progress-fill").style.width = pct + "%";
-  document.getElementById("dd-progress-label").textContent =
-    todayTotal === 0 ? "Nothing on today" :
-    todayDone + " / " + todayTotal + "  ·  " + pct + "%";
-  document.getElementById("dd-stats").innerHTML =
-    "<strong>" + state.projects.length + "</strong> project" + (state.projects.length === 1 ? "" : "s");
+  const ratio = todayTotal === 0 ? 0 : (todayDone / todayTotal);
+  const pct   = Math.round(ratio * 100);
+  const wrap = document.getElementById("dd-progress-wrap");
+  if (!wrap) return;
+  wrap.innerHTML = buildProgressCircle({
+    size: 76,
+    pct: ratio,
+    color: 'var(--good)',
+    label: todayTotal === 0 ? "—" : pct + "%",
+    sub:   todayTotal === 0 ? "today" : todayDone + " / " + todayTotal,
+    labelSize: 9,
+    subSize: 4.5
+  });
 }
 
 // ─── Filter bar ────────────────────────────────────────
@@ -4018,6 +4100,8 @@ async function loadStateFromCloud() {
     state.windDown = {
       hour:   (typeof prefsRes.data.winddown_hour   === "number") ? prefsRes.data.winddown_hour   : 20,
       minute: (typeof prefsRes.data.winddown_minute === "number") ? prefsRes.data.winddown_minute : 0,
+      startHour:   (typeof prefsRes.data.winddown_start_hour   === "number") ? prefsRes.data.winddown_start_hour   : 8,
+      startMinute: (typeof prefsRes.data.winddown_start_minute === "number") ? prefsRes.data.winddown_start_minute : 0,
       lastTriggeredDate: prefsRes.data.winddown_last_triggered || null
     };
   }
@@ -4123,6 +4207,8 @@ async function flushDirty() {
       keystone_done: !!k.done,
       winddown_hour: (typeof w.hour === "number") ? w.hour : 20,
       winddown_minute: (typeof w.minute === "number") ? w.minute : 0,
+      winddown_start_hour: (typeof w.startHour === "number") ? w.startHour : 8,
+      winddown_start_minute: (typeof w.startMinute === "number") ? w.startMinute : 0,
       winddown_last_triggered: w.lastTriggeredDate || null
     }));
   }
@@ -4244,7 +4330,7 @@ async function bootstrap() {
       state = {
         projects: [], labels: [], filters: {},
         keystone: { date: null, text: "", done: false },
-        windDown: { hour: 20, minute: 0, lastTriggeredDate: null },
+        windDown: { hour: 20, minute: 0, startHour: 8, startMinute: 0, lastTriggeredDate: null },
         deepWork: { active: false, startedAt: null, durationMs: 75 * 60 * 1000,
                     completedToday: 0, completedDate: null },
         journal: {}
