@@ -395,6 +395,14 @@ input.search:focus + kbd { display: none; }
   gap: 22px;
   min-height: 360px;
 }
+.journal-card .question-icon {
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent);
+  margin-bottom: -4px;
+}
+.journal-card .question-icon .journal-icon {
+  width: 28px; height: 28px;
+}
 .journal-card .question {
   font-family: var(--font-serif); font-weight: 500;
   font-size: 30px; line-height: 1.25; letter-spacing: -0.02em;
@@ -468,11 +476,21 @@ body.journal-mode #journal-view { padding-top: 20px; }
   border: 1px solid var(--border);
   border-radius: 10px;
 }
+.journal-review .entry .q-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 10px;
+}
+.journal-review .entry .q-icon {
+  color: var(--accent); display: inline-flex;
+  flex-shrink: 0;
+}
+.journal-review .entry .q-icon .journal-icon {
+  width: 20px; height: 20px;
+}
 .journal-review .entry .q {
   font-family: var(--font-serif); font-weight: 500;
   font-size: 17px; line-height: 1.35; letter-spacing: -0.01em;
   color: var(--accent);
-  margin-bottom: 8px;
 }
 .journal-review .entry .a {
   font-size: 14px; line-height: 1.6;
@@ -3483,10 +3501,40 @@ function wireHomeView() {
 }
 
 // ─── Render: Morning Journal ──────────────────────────
+// Inline SVG icons (Lucide-style) shown above each question
+const JOURNAL_ICONS = {
+  trash:
+    '<svg class="journal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M3 6h18"/>' +
+      '<path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' +
+      '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>' +
+      '<line x1="10" y1="11" x2="10" y2="17"/>' +
+      '<line x1="14" y1="11" x2="14" y2="17"/>' +
+    '</svg>',
+  target:
+    '<svg class="journal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<circle cx="12" cy="12" r="10"/>' +
+      '<circle cx="12" cy="12" r="6"/>' +
+      '<circle cx="12" cy="12" r="2" fill="currentColor"/>' +
+    '</svg>',
+  ball:
+    '<svg class="journal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+      'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<circle cx="15" cy="13" r="6"/>' +
+      '<path d="M3 20c2-4 4-6 6-7"/>' +
+      '<path d="M2 17l1 3 3-1"/>' +
+    '</svg>'
+};
+
 const JOURNAL_QUESTIONS = [
-  { key: "q1", text: "What are things that you're doing poorly or wrong that you could fix?" },
-  { key: "q2", text: "What are things that you're not doing but you could?" },
-  { key: "q3", text: "What's the smallest thing you can do right now to get a win?" }
+  { key: "q1", icon: "trash",
+    text: "What are things that you're doing poorly or wrong that you could fix?" },
+  { key: "q2", icon: "target",
+    text: "What are things that you're not doing but you could?" },
+  { key: "q3", icon: "ball",
+    text: "What's the smallest thing you can do right now to get a win?" }
 ];
 let journalStep = 0;           // Currently visible question (0..2)
 let journalReviewMode = false; // After Submit, show read-only review
@@ -3527,8 +3575,12 @@ function renderJournal() {
     });
     const entries = JOURNAL_QUESTIONS.map(q => {
       const ans = (entry[q.key] || "").trim();
+      const icon = JOURNAL_ICONS[q.icon] || "";
       return '<div class="entry">' +
-        '<div class="q">' + q.text + '</div>' +
+        '<div class="q-row">' +
+          '<span class="q-icon">' + icon + '</span>' +
+          '<div class="q">' + q.text + '</div>' +
+        '</div>' +
         '<div class="a' + (ans ? "" : " empty") + '">' +
           (ans ? escapeAttr(ans) : "(no answer)") +
         '</div>' +
@@ -3564,9 +3616,12 @@ function renderJournal() {
   const isLast = journalStep === JOURNAL_QUESTIONS.length - 1;
   const prevDisabled = journalStep === 0 ? " disabled" : "";
 
+  const iconHtml = JOURNAL_ICONS[q.icon] || "";
+
   container.innerHTML =
     '<div class="journal-stepper">' + steps + '</div>' +
     '<div class="journal-card">' +
+      '<div class="question-icon">' + iconHtml + '</div>' +
       '<div class="question">' + q.text + '</div>' +
       '<textarea id="journal-textarea" placeholder="Write…">' + escapeAttr(value) + '</textarea>' +
       '<div class="journal-nav">' +
