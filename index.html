@@ -1137,6 +1137,61 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 .tab-edit-popover .delete-btn:hover { color: var(--bad); border-color: var(--bad); background: rgba(239, 68, 68, 0.1); }
 
+/* Board sharing section inside the edit popover */
+.tab-edit-popover .share-section {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 10px;
+  margin-bottom: 8px;
+}
+.tab-edit-popover .share-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-3);
+  margin-bottom: 8px;
+}
+.tab-edit-popover .share-row {
+  display: flex; gap: 6px; margin-bottom: 8px;
+}
+.tab-edit-popover .share-email-input {
+  flex: 1; min-width: 0;
+  background: var(--bg); border: 1px solid var(--border-strong);
+  color: var(--text); font-family: inherit;
+  padding: 6px 9px; border-radius: 5px; font-size: 12px;
+}
+.tab-edit-popover .share-email-input:focus { outline: none; border-color: var(--accent); }
+.tab-edit-popover .share-email-input::placeholder { color: var(--text-4); }
+.tab-edit-popover .share-add {
+  background: var(--accent); color: #0a0a0a; border: none;
+  padding: 6px 12px; border-radius: 5px; font-family: inherit;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.tab-edit-popover .share-add:hover { background: #ff7a59; }
+.tab-edit-popover .share-error {
+  font-size: 11px; color: var(--bad);
+  margin-bottom: 6px;
+}
+.tab-edit-popover .share-empty {
+  font-size: 11px; color: var(--text-4); font-style: italic;
+}
+.tab-edit-popover .share-member {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px;
+  background: var(--card-hover);
+  border-radius: 5px;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+.tab-edit-popover .share-email {
+  flex: 1; min-width: 0;
+  color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tab-edit-popover .share-remove {
+  background: none; border: none; color: var(--text-4);
+  cursor: pointer; font-size: 14px; line-height: 1; padding: 0 5px;
+}
+.tab-edit-popover .share-remove:hover { color: var(--bad); }
+
 /* Filter bar — filters on the left, metrics centered, new-project on the right */
 .filter-bar {
   display: grid;
@@ -2694,7 +2749,7 @@ function updateLabel(id, field, value) {
   renderTabs();
 }
 function deleteLabel(id) {
-  if (!confirm("Delete this tab? Projects in it will become Uncategorized.")) return;
+  if (!confirm("Delete this board? Projects in it will become Uncategorized.")) return;
   state.labels = state.labels.filter(l => l.id !== id);
   // Any projects that pointed at this label become uncategorized — those rows need to sync
   state.projects.forEach(p => {
@@ -2737,16 +2792,107 @@ function setView(view) {
 // ─── Render tabs ───────────────────────────────────────
 let activeTabEditor = null; // labelId currently being edited, or null
 
+// ─── Board sharing ────────────────────────────────────
+// Members per board are fetched lazily when the user opens an edit popover.
+// Cached in-memory only — re-fetched each session.
+const boardMembersCache = {};   // boardId → [{ user_id, role, email, display_name }]
+const boardShareError   = {};   // boardId → string (last share error, cleared on success)
+
+async function loadBoardMembers(boardId) {
+  if (!sb || !currentUser) return [];
+  const memRes = await sb.from('tab_members')
+    .select('user_id, role')
+    .eq('tab_id', boardId);
+  if (memRes.error) { console.error('members', memRes.error); return []; }
+  const rows = memRes.data || [];
+  if (rows.length === 0) return [];
+  const ids = rows.map(r => r.user_id);
+  const profRes = await sb.from('profiles')
+    .select('id, email, display_name')
+    .in('id', ids);
+  const profs = (profRes && profRes.data) || [];
+  return rows.map(m => {
+    const p = profs.find(pp => pp.id === m.user_id) || {};
+    return {
+      user_id: m.user_id,
+      role: m.role,
+      email: p.email || '',
+      display_name: p.display_name || ''
+    };
+  });
+}
+async function shareBoardWithUser(boardId, rawEmail) {
+  if (!sb || !currentUser) return;
+  const email = (rawEmail || "").trim().toLowerCase();
+  if (!email) { boardShareError[boardId] = "Enter an email."; return; }
+  // Look up the profile by email
+  const profRes = await sb.from('profiles')
+    .select('id, email')
+    .eq('email', email)
+    .maybeSingle();
+  if (profRes.error) { boardShareError[boardId] = "Lookup failed."; return; }
+  const prof = profRes.data;
+  if (!prof) { boardShareError[boardId] = "No Slate account with that email."; return; }
+  if (prof.id === currentUser.id) { boardShareError[boardId] = "That's you."; return; }
+  // Insert into tab_members
+  const ins = await sb.from('tab_members').insert({
+    tab_id: boardId,
+    user_id: prof.id,
+    role: 'editor'
+  });
+  if (ins.error) {
+    boardShareError[boardId] = ins.error.code === '23505'
+      ? "Already shared."
+      : (ins.error.message || "Could not share.");
+    return;
+  }
+  boardShareError[boardId] = "";
+  boardMembersCache[boardId] = await loadBoardMembers(boardId);
+}
+async function removeBoardMember(boardId, userId) {
+  if (!sb || !currentUser) return;
+  const del = await sb.from('tab_members').delete()
+    .eq('tab_id', boardId)
+    .eq('user_id', userId);
+  if (del.error) console.error('remove member', del.error);
+  boardMembersCache[boardId] = await loadBoardMembers(boardId);
+}
+
 function renderTabEditPopover(l) {
   const swatches = COLOR_PALETTE.map(c =>
     '<div class="color-swatch ' + (l.color === c.hex ? "selected" : "") + '" ' +
       'data-color="' + c.hex + '" data-label-id="' + l.id + '" ' +
       'style="background:' + c.hex + ';" title="' + c.name + '"></div>'
   ).join("");
+  // Share section — shows members + add-by-email
+  const members = boardMembersCache[l.id] || [];
+  const err = boardShareError[l.id] || "";
+  const membersHtml = members.length === 0
+    ? '<div class="share-empty">Only you can see this board.</div>'
+    : members.map(m =>
+        '<div class="share-member">' +
+          '<span class="share-email">' + escapeAttr(m.email || m.display_name || 'Member') + '</span>' +
+          '<button class="share-remove" data-action="remove-member" ' +
+            'data-board-id="' + l.id + '" data-user-id="' + m.user_id + '" ' +
+            'title="Remove member">×</button>' +
+        '</div>'
+      ).join("");
+  const errHtml = err ? '<div class="share-error">' + escapeAttr(err) + '</div>' : '';
+
   return '<div class="tab-edit-popover" data-label-id="' + l.id + '">' +
-    '<input type="text" class="name" placeholder="Tab name" value="' + escapeAttr(l.name) + '">' +
+    '<input type="text" class="name" placeholder="Board name" value="' + escapeAttr(l.name) + '">' +
     '<div class="swatches">' + swatches + '</div>' +
-    '<button class="delete-btn" data-action="delete-tab" data-label-id="' + l.id + '">Delete tab</button>' +
+    '<div class="share-section">' +
+      '<div class="share-title">Share</div>' +
+      '<div class="share-row">' +
+        '<input type="email" class="share-email-input" placeholder="email@example.com" ' +
+          'data-board-id="' + l.id + '">' +
+        '<button class="share-add" data-action="add-member" data-board-id="' + l.id + '">Add</button>' +
+      '</div>' +
+      errHtml +
+      '<div class="share-members">' + membersHtml + '</div>' +
+    '</div>' +
+    '<button class="delete-btn" data-action="delete-tab" data-label-id="' + l.id + '">Delete board</button>' +
   '</div>';
 }
 
@@ -2796,7 +2942,7 @@ function renderTabs() {
           '<span class="dot" style="background:' + l.color + ';"></span>' +
           '<span class="name">' + escapeAttr(l.name || "Unnamed") + '</span>' +
           '<span class="pill">' + count + '</span>' +
-          '<span class="edit-icon" data-tab-edit="' + l.id + '" title="Edit tab">⋮</span>' +
+          '<span class="edit-icon" data-tab-edit="' + l.id + '" title="Edit board">⋮</span>' +
         '</button>' +
         popover +
       '</div>';
@@ -2814,9 +2960,9 @@ function renderTabs() {
   }
 
   // "+ New tab" button
-  html += '<button class="sidebar-add" id="tab-add" title="New tab">' +
+  html += '<button class="sidebar-add" id="tab-add" title="New board">' +
     '<span class="dot"></span>' +
-    '<span class="name">New tab</span>' +
+    '<span class="name">New board</span>' +
   '</button>';
 
   // Archive — sits at the bottom of the tab list, with a divider above
@@ -2910,18 +3056,25 @@ function wireTabs() {
     });
   });
 
-  // Edit icon click → open editor popover
+  // Edit icon click → open editor popover (fetches members async)
   tabsEl.querySelectorAll('[data-tab-edit]').forEach(el => {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = el.dataset.tabEdit;
       activeTabEditor = activeTabEditor === id ? null : id;
+      // Clear any stale share error from a previous editor session
+      if (activeTabEditor) boardShareError[id] = "";
       renderTabs();
       if (activeTabEditor) {
         setTimeout(() => {
           const inp = document.querySelector('.tab-edit-popover input.name');
           if (inp) { inp.focus(); inp.select(); }
         }, 0);
+        // Lazily fetch members and re-render the popover when they arrive
+        loadBoardMembers(id).then(members => {
+          boardMembersCache[id] = members;
+          if (activeTabEditor === id) renderTabs();
+        });
       }
     });
   });
@@ -2976,7 +3129,7 @@ function wireTabs() {
   tabsEl.querySelectorAll('.tab-edit-popover [data-action="delete-tab"]').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (!confirm("Delete this tab? Projects in it will become Uncategorized.")) return;
+      if (!confirm("Delete this board? Projects in it will become Uncategorized.")) return;
       const id = btn.dataset.labelId;
       state.labels = state.labels.filter(l => l.id !== id);
       state.projects.forEach(p => {
@@ -2988,6 +3141,47 @@ function wireTabs() {
       activeTabEditor = null;
       saveState();
       renderAll();
+    });
+  });
+
+  // Share inputs — Enter or Add button → share with that email
+  tabsEl.querySelectorAll('.tab-edit-popover .share-email-input').forEach(inp => {
+    inp.addEventListener('click', (e) => e.stopPropagation());
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const id = inp.dataset.boardId;
+        const email = inp.value;
+        inp.disabled = true;
+        shareBoardWithUser(id, email).then(() => {
+          if (!boardShareError[id]) inp.value = "";
+          if (activeTabEditor === id) renderTabs();
+        });
+      }
+    });
+  });
+  tabsEl.querySelectorAll('.tab-edit-popover [data-action="add-member"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.boardId;
+      const inp = document.querySelector('.tab-edit-popover .share-email-input[data-board-id="' + id + '"]');
+      if (!inp) return;
+      const email = inp.value;
+      inp.disabled = true;
+      shareBoardWithUser(id, email).then(() => {
+        if (!boardShareError[id]) inp.value = "";
+        if (activeTabEditor === id) renderTabs();
+      });
+    });
+  });
+  tabsEl.querySelectorAll('.tab-edit-popover [data-action="remove-member"]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.boardId;
+      const uid2 = btn.dataset.userId;
+      removeBoardMember(id, uid2).then(() => {
+        if (activeTabEditor === id) renderTabs();
+      });
     });
   });
 }
@@ -4902,12 +5096,12 @@ function renderJournal() {
          '</select>');
 
     const creatorHtml = state.labels.length === 0 ?
-      '<div class="journal-tasks-empty">Create a tab first to add actionables here.</div>' :
+      '<div class="journal-tasks-empty">Create a board first to add actionables here.</div>' :
       ('<div class="journal-task-form">' +
         '<input type="text" id="jt-text" class="jt-text-input" placeholder="What needs to happen?">' +
         '<div class="jt-row">' +
           '<select id="jt-tab" class="jt-select">' +
-            '<option value="">Tab *</option>' + tabsHtml +
+            '<option value="">Board *</option>' + tabsHtml +
           '</select>' +
           projectFieldHtml +
           '<select id="jt-status" class="jt-select">' +
@@ -4919,7 +5113,7 @@ function renderJournal() {
           '<button class="btn accent" id="jt-add">Add actionable</button>' +
         '</div>' +
         (journalNewProjectMode ? '' :
-          '<button class="jt-link" id="jt-new-proj-toggle">+ Create new project in this tab</button>') +
+          '<button class="jt-link" id="jt-new-proj-toggle">+ Create new project in this board</button>') +
        '</div>' + addedHtml);
 
     container.innerHTML =
