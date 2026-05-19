@@ -591,13 +591,44 @@ ul.items > li {
 ul.items > li:last-child { border-bottom: none; }
 ul.items > li:first-child { padding-top: 0; }
 ul.items > li.dragging { opacity: 0.4; }
-ul.items > li::before {
-  content: ""; position: absolute; left: -8px; right: 0; top: -1px;
+
+/* Drop indicators: above/below as sibling + nest as child */
+ul.items > li::before,
+ul.items > li::after {
+  content: ""; position: absolute; left: -8px; right: 0;
   height: 2px; background: var(--accent); border-radius: 1px;
-  opacity: 0;
+  opacity: 0; pointer-events: none;
 }
-ul.items > li.drag-over::before { opacity: 1; }
+ul.items > li::before { top: -1px; }
+ul.items > li::after  { bottom: -1px; }
+ul.items > li.drag-over-above::before { opacity: 1; }
+ul.items > li.drag-over-below::after  { opacity: 1; }
+ul.items > li.drag-over-nest > .item-row {
+  background: rgba(255, 107, 71, 0.10);
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
 ul.items > li.hidden-by-search { display: none; }
+
+/* Subtask indentation — guide line on the left */
+ul.items > li[data-depth="1"] > .item-row,
+ul.items > li[data-depth="1"] > .context-row { padding-left: 24px; }
+ul.items > li[data-depth="2"] > .item-row,
+ul.items > li[data-depth="2"] > .context-row { padding-left: 48px; }
+ul.items > li[data-depth="1"]::before { left: 16px; }
+ul.items > li[data-depth="1"]::after  { left: 16px; }
+ul.items > li[data-depth="2"]::before { left: 40px; }
+ul.items > li[data-depth="2"]::after  { left: 40px; }
+ul.items > li[data-depth="1"] > .item-row::before,
+ul.items > li[data-depth="2"] > .item-row::before {
+  content: ""; position: absolute; top: 50%; width: 10px; height: 1px;
+  background: var(--border-strong);
+}
+ul.items > li[data-depth="1"] > .item-row::before { left: 10px; }
+ul.items > li[data-depth="2"] > .item-row::before { left: 34px; }
+ul.items > li[data-depth="1"] > .item-row,
+ul.items > li[data-depth="2"] > .item-row { position: relative; }
 
 .item-row {
   display: flex; align-items: center; gap: 6px;
@@ -821,6 +852,15 @@ ul.items .li-rm:hover { color: var(--bad); }
   font-weight: 500; cursor: pointer; white-space: nowrap;
 }
 .today-item .proj-tag:hover { background: #2a2a30; color: var(--text); }
+
+/* Home view subtask indentation */
+.today-item[data-depth="1"] { margin-left: 28px; position: relative; }
+.today-item[data-depth="2"] { margin-left: 56px; position: relative; }
+.today-item[data-depth="1"]::before,
+.today-item[data-depth="2"]::before {
+  content: ""; position: absolute; left: -14px; top: 50%;
+  width: 10px; height: 1px; background: var(--border-strong);
+}
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1130,10 +1170,14 @@ state.projects.forEach(p => {
       a.stuckSince = a.status === "stuck" ? NOW : null;
     }
     if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
+    if (a.parentId === undefined) a.parentId = null;
     delete a.labels;
     delete a.blockedBy;
     delete a.dueDate;
   });
+  // Repair any dangling parent references (orphans become top-level)
+  const ids = new Set(p.actionables.map(a => a.id));
+  p.actionables.forEach(a => { if (a.parentId && !ids.has(a.parentId)) a.parentId = null; });
   delete p.blockers;
 });
 saveState();
@@ -1224,6 +1268,81 @@ function clearFilters() {
   else renderProjects();
 }
 
+// ─── Sub-item tree helpers ─────────────────────────────
+// Actionables form a tree via a.parentId. We keep the flat array as the
+// source of truth (preserves order) and compute hierarchy on demand. Depth
+// is capped at MAX_DEPTH (3 visible levels: 0, 1, 2).
+const MAX_DEPTH = 2;
+
+function getChildren(p, parentId) {
+  return p.actionables.filter(a => (a.parentId || null) === (parentId || null));
+}
+function getDepth(p, a) {
+  let d = 0, cur = a, guard = 0;
+  while (cur && cur.parentId && guard++ < 10) {
+    cur = findActionable(p, cur.parentId);
+    if (!cur) break;
+    d++;
+  }
+  return d;
+}
+function getSubtreeDepth(p, a) {
+  // Max depth of a's descendant subtree, relative to a (0 = no children).
+  const kids = getChildren(p, a.id);
+  if (!kids.length) return 0;
+  return 1 + Math.max(...kids.map(k => getSubtreeDepth(p, k)));
+}
+function getDescendants(p, a) {
+  const out = [];
+  const stack = [a.id];
+  while (stack.length) {
+    const id = stack.pop();
+    p.actionables.forEach(x => {
+      if ((x.parentId || null) === id) { out.push(x); stack.push(x.id); }
+    });
+  }
+  return out;
+}
+function isAncestorOf(p, ancestorId, descendantId) {
+  let cur = findActionable(p, descendantId);
+  let guard = 0;
+  while (cur && cur.parentId && guard++ < 10) {
+    if (cur.parentId === ancestorId) return true;
+    cur = findActionable(p, cur.parentId);
+  }
+  return false;
+}
+// Linearize the tree in render order, with depth annotations.
+function buildActionableTree(p, items) {
+  // items: subset of p.actionables to be considered "visible". The result
+  // preserves p.actionables ordering and the parent→child structure.
+  const visibleIds = new Set(items.map(a => a.id));
+  const out = [];
+  function walk(parentId, depth) {
+    p.actionables
+      .filter(a => (a.parentId || null) === (parentId || null) && visibleIds.has(a.id))
+      .forEach(a => { out.push({ item: a, depth }); walk(a.id, depth + 1); });
+  }
+  walk(null, 0);
+  return out;
+}
+// Given a set of items that match a filter, expand it to include ancestors
+// so the indent context is preserved.
+function withAncestors(p, items) {
+  const ids = new Set(items.map(a => a.id));
+  items.forEach(a => {
+    let cur = a;
+    while (cur.parentId) {
+      if (ids.has(cur.parentId)) break;
+      const parent = findActionable(p, cur.parentId);
+      if (!parent) break;
+      ids.add(parent.id);
+      cur = parent;
+    }
+  });
+  return p.actionables.filter(a => ids.has(a.id));
+}
+
 // View → project filter (tab is the category)
 function projectsInCurrentView() {
   if (currentView === "home") return [];
@@ -1288,7 +1407,8 @@ function addActionable(projId) {
     status: null,
     blocker: "", waitingFor: "",
     createdAt: now, updatedAt: now,
-    priority: 0, stuckSince: null, doneAt: null
+    priority: 0, stuckSince: null, doneAt: null,
+    parentId: null
   };
   p.actionables.push(a);
   markActionDirty(a.id);
@@ -1303,8 +1423,23 @@ function updateActionable(projId, itemId, field, value) {
   const p = findProject(projId); if (!p) return;
   const it = findActionable(p, itemId); if (!it) return;
   if (field === "done") {
-    if (value && !it.done) it.doneAt = new Date().toISOString();
+    const now = new Date().toISOString();
+    if (value && !it.done) it.doneAt = now;
     if (!value) it.doneAt = null;
+    it.done = value;
+    touchActionable(it);
+    markActionDirty(itemId);
+    // Cascade to descendants: checking parent checks all subs (and unchecking
+    // unchecks them — matches Notion / Things behavior).
+    getDescendants(p, it).forEach(d => {
+      if (value && !d.done) d.doneAt = now;
+      if (!value) d.doneAt = null;
+      d.done = value;
+      touchActionable(d);
+      markActionDirty(d.id);
+    });
+    saveState();
+    return;
   }
   it[field] = value;
   touchActionable(it);
@@ -1313,9 +1448,34 @@ function updateActionable(projId, itemId, field, value) {
 }
 function removeActionable(projId, itemId) {
   const p = findProject(projId); if (!p) return;
-  p.actionables = p.actionables.filter(a => a.id !== itemId);
-  markActionDeleted(itemId);
+  const target = findActionable(p, itemId);
+  if (!target) return;
+  // Remove the item plus all descendants
+  const descIds = new Set(getDescendants(p, target).map(d => d.id));
+  descIds.add(itemId);
+  p.actionables = p.actionables.filter(a => !descIds.has(a.id));
+  descIds.forEach(id => markActionDeleted(id));
   saveState(); renderAll();
+}
+function nestActionable(projId, draggedId, newParentId) {
+  // Make draggedId a child of newParentId (or top-level if null).
+  // Validates: no cycle, respects MAX_DEPTH.
+  const p = findProject(projId); if (!p) return false;
+  const dragged = findActionable(p, draggedId); if (!dragged) return false;
+  if (newParentId === draggedId) return false;
+  if (newParentId && isAncestorOf(p, draggedId, newParentId)) return false; // cycle
+  const parent = newParentId ? findActionable(p, newParentId) : null;
+  if (newParentId && !parent) return false;
+  // Depth check: new depth of dragged + its own subtree depth must fit
+  const parentDepth = parent ? getDepth(p, parent) : -1;
+  const newDepth = parentDepth + 1;
+  const sub = getSubtreeDepth(p, dragged);
+  if (newDepth + sub > MAX_DEPTH) return false;
+  dragged.parentId = newParentId || null;
+  touchActionable(dragged);
+  markActionDirty(draggedId);
+  saveState();
+  return true;
 }
 function setActionableStatus(projId, itemId, status) {
   const p = findProject(projId); if (!p) return;
@@ -1338,17 +1498,55 @@ function cyclePriority(projId, itemId) {
   markActionDirty(itemId);
   saveState(); renderProjects();
 }
-function reorderActionables(projId, draggedId, targetId) {
-  const p = findProject(projId); if (!p) return;
+// Unified drop: place dragged relative to target with one of three modes.
+//   "above" → become a sibling of target, inserted just before it
+//   "below" → become a sibling of target, inserted just after it
+//   "nest"  → become a child of target (depth permitting)
+// Returns true on success. Rejects cycles and over-depth nesting.
+function dropActionable(projId, draggedId, targetId, mode) {
+  const p = findProject(projId); if (!p) return false;
+  if (draggedId === targetId) return false;
+  const dragged = findActionable(p, draggedId); if (!dragged) return false;
+  const target  = findActionable(p, targetId);  if (!target)  return false;
+  // No cycles: target must not be inside dragged's subtree
+  if (isAncestorOf(p, draggedId, targetId)) return false;
+
+  let newParentId;
+  if (mode === "nest") newParentId = target.id;
+  else                 newParentId = target.parentId || null;
+
+  // Depth check (root depth = 0, max visible depth = MAX_DEPTH)
+  const newParent = newParentId ? findActionable(p, newParentId) : null;
+  const parentDepth = newParent ? getDepth(p, newParent) : -1;
+  const newDepth = parentDepth + 1;
+  const subDepth = getSubtreeDepth(p, dragged);
+  if (newDepth + subDepth > MAX_DEPTH) return false;
+
+  // Splice dragged out (descendants stay in-place — they reference dragged by id)
   const draggedIdx = p.actionables.findIndex(a => a.id === draggedId);
-  if (draggedIdx === -1) return;
-  const dragged = p.actionables[draggedIdx];
+  if (draggedIdx === -1) return false;
   p.actionables.splice(draggedIdx, 1);
-  const newTargetIdx = p.actionables.findIndex(a => a.id === targetId);
-  if (newTargetIdx === -1) { p.actionables.splice(draggedIdx, 0, dragged); return; }
-  p.actionables.splice(newTargetIdx, 0, dragged);
+
+  // Recompute target index after removal
+  const targetIdx = p.actionables.findIndex(a => a.id === targetId);
+  let insertAt;
+  if (mode === "above")      insertAt = targetIdx;
+  else if (mode === "below") insertAt = targetIdx + 1;
+  else /* nest */            insertAt = targetIdx + 1;
+  if (targetIdx === -1) insertAt = p.actionables.length;
+
+  dragged.parentId = newParentId;
+  touchActionable(dragged);
+  p.actionables.splice(insertAt, 0, dragged);
+
   markProjectActionsDirty(projId);
-  saveState(); renderProjects();
+  saveState(); renderAll();
+  return true;
+}
+
+// Kept for back-compat with any caller (now equivalent to drop-above).
+function reorderActionables(projId, draggedId, targetId) {
+  dropActionable(projId, draggedId, targetId, "above");
 }
 
 // ─── Labels (tab) CRUD ─────────────────────────────────
@@ -1817,11 +2015,12 @@ function renderProject(p) {
   const l = findLabel(p.labelId);
   const colorAttrs = l ? 'data-label-color="' + l.color + '" style="--proj-color:' + l.color + ';"' : '';
 
+  const filterActive = isItemFilterActive();
   const active = [];
   const recentDone = [];
   const archived = [];
   p.actionables.forEach(a => {
-    if (isItemFilterActive() && !passesAllItemFilters(a)) return;
+    if (filterActive && !passesAllItemFilters(a)) return;
     if (!a.done) active.push(a);
     else {
       const age = a.doneAt ? (Date.now() - new Date(a.doneAt).getTime()) : ARCHIVE_AFTER_MS + 1;
@@ -1830,7 +2029,13 @@ function renderProject(p) {
     }
   });
   const showArchived = expandedDone.has(p.id);
-  const visible = active.concat(recentDone).concat(showArchived ? archived : []);
+  let visible = active.concat(recentDone).concat(showArchived ? archived : []);
+  // Pull in ancestors so indented children always show their parent context
+  // (without this, a visible child whose parent isn't in `visible` would
+  // get orphaned by the tree walker).
+  visible = withAncestors(p, visible);
+
+  const flat = buildActionableTree(p, visible);
 
   const doneFooter = archived.length > 0
     ? '<div class="done-footer ' + (showArchived ? "expanded" : "") + '" data-action="toggle-done-footer">' +
@@ -1851,9 +2056,9 @@ function renderProject(p) {
         '<span class="count">' + active.length + ' open</span>' +
       '</div>' +
       '<ul class="items actionables-list">' +
-        (visible.length === 0
+        (flat.length === 0
           ? '<li style="border:none; padding:0;"><div class="empty-line">No actionables — add one below</div></li>'
-          : visible.map(a => renderActionable(p, a)).join("")
+          : flat.map(node => renderActionable(p, node.item, node.depth)).join("")
         ) +
       '</ul>' +
       '<button class="btn add-line" data-action="add-actionable">+ Add actionable</button>' +
@@ -1898,7 +2103,8 @@ function renderStatusPicker(p, a) {
   );
 }
 
-function renderActionable(p, a) {
+function renderActionable(p, a, depth) {
+  depth = depth || 0;
   const prioLabels = ["P", "LOW", "MED", "HIGH"];
   const prioBtn = '<button class="priority-chip p-' + a.priority + '" data-action="cycle-priority" title="Cycle priority">' +
     (a.priority === 0 ? "P" : prioLabels[a.priority]) + '</button>';
@@ -1926,7 +2132,7 @@ function renderActionable(p, a) {
   }
 
   return (
-    '<li data-item-id="' + a.id + '" class="' + (a.done ? "done" : "") + '">' +
+    '<li data-item-id="' + a.id + '" data-depth="' + depth + '" class="' + (a.done ? "done" : "") + '">' +
       '<div class="item-row">' +
         '<span class="item-drag-handle" data-item-drag-handle>⋮⋮</span>' +
         '<input type="checkbox" data-action="toggle-actionable"' + (a.done ? " checked" : "") + '>' +
@@ -2083,6 +2289,24 @@ function attachDragHandlers() {
       reorderProjects(draggedId, targetId);
     });
 
+    // ── Actionable rows: drag to reorder OR nest as sub-item ──
+    // Three drop zones per row (by mouse Y within the row):
+    //   top 30%    → place ABOVE as sibling
+    //   middle 40% → NEST as child (depth permitting)
+    //   bottom 30% → place BELOW as sibling
+    function clearActionableDropMarkers() {
+      article.querySelectorAll('.actionables-list > li').forEach(el =>
+        el.classList.remove("drag-over-above", "drag-over-below", "drag-over-nest"));
+    }
+    function dropModeFor(li, e) {
+      const rect = li.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const h = rect.height;
+      if (y < h * 0.30) return "above";
+      if (y > h * 0.70) return "below";
+      return "nest";
+    }
+
     article.querySelectorAll('.actionables-list > li').forEach(li => {
       const ah = li.querySelector('[data-item-drag-handle]');
       if (!ah) return;
@@ -2099,24 +2323,34 @@ function attachDragHandlers() {
       li.addEventListener("dragend", () => {
         li.classList.remove("dragging");
         li.draggable = false;
-        article.querySelectorAll('.actionables-list > li.drag-over').forEach(el => el.classList.remove("drag-over"));
+        clearActionableDropMarkers();
       });
       li.addEventListener("dragover", (e) => {
         if (!Array.from(e.dataTransfer.types).includes("application/x-actionable")) return;
+        if (li.classList.contains("dragging")) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
-        if (!li.classList.contains("dragging")) li.classList.add("drag-over");
+        const mode = dropModeFor(li, e);
+        // Reset siblings, then mark this one with the right zone class
+        clearActionableDropMarkers();
+        li.classList.add("drag-over-" + mode);
       });
-      li.addEventListener("dragleave", () => li.classList.remove("drag-over"));
+      li.addEventListener("dragleave", (e) => {
+        // Only clear if leaving the row itself (not a child element)
+        if (!li.contains(e.relatedTarget)) {
+          li.classList.remove("drag-over-above", "drag-over-below", "drag-over-nest");
+        }
+      });
       li.addEventListener("drop", (e) => {
         const draggedId = e.dataTransfer.getData("application/x-actionable");
         const draggedProj = e.dataTransfer.getData("application/x-actionable-proj");
         if (!draggedId) return;
         e.preventDefault();
-        li.classList.remove("drag-over");
+        const mode = dropModeFor(li, e);
+        clearActionableDropMarkers();
         if (draggedProj !== article.dataset.projectId) return;
         if (draggedId === li.dataset.itemId) return;
-        reorderActionables(article.dataset.projectId, draggedId, li.dataset.itemId);
+        dropActionable(article.dataset.projectId, draggedId, li.dataset.itemId, mode);
       });
     });
   });
@@ -2271,8 +2505,12 @@ function renderHome() {
 
   const groups = [];
   state.projects.forEach(p => {
-    const items = p.actionables.filter(a => !a.done && ok(a));
-    if (items.length) groups.push({ project: p, items });
+    let items = p.actionables.filter(a => !a.done && ok(a));
+    if (!items.length) return;
+    // Keep ancestor context so indentation makes sense in the Home list
+    items = withAncestors(p, items);
+    const tree = buildActionableTree(p, items);
+    groups.push({ project: p, tree });
   });
 
   if (groups.length === 0) {
@@ -2291,10 +2529,9 @@ function renderHome() {
     return;
   }
 
-  groups.forEach(g => g.items.sort((x, y) => (x.done === y.done ? 0 : x.done ? 1 : -1)));
-
   container.innerHTML = statsHtml + groups.map(g => {
-    const openCount = g.items.filter(i => !i.done).length;
+    const items = g.tree.map(n => n.item);
+    const openCount = items.filter(i => !i.done).length;
     const l = findLabel(g.project.labelId);
     const labelChip = l ?
       ' <span class="label-chip" style="background:' + l.color + '22; color:' + l.color + '; border-color:' + l.color + '55;">' +
@@ -2305,11 +2542,11 @@ function renderHome() {
       '<div class="today-group">' +
         '<h3>' + escapeAttr(g.project.name || "(untitled project)") + labelChip +
           '<span style="color:var(--text-4); font-weight:400; text-transform:none; letter-spacing:0; margin-left:auto;">' +
-            openCount + ' / ' + g.items.length +
+            openCount + ' / ' + items.length +
           '</span>' +
         '</h3>' +
         '<div class="today-list">' +
-          g.items.map(a => renderHomeItem(g.project, a)).join("") +
+          g.tree.map(n => renderHomeItem(g.project, n.item, n.depth)).join("") +
         '</div>' +
       '</div>'
     );
@@ -2318,9 +2555,10 @@ function renderHome() {
   wireHomeView();
 }
 
-function renderHomeItem(p, a) {
+function renderHomeItem(p, a, depth) {
+  depth = depth || 0;
   return (
-    '<div class="today-item' + (a.done ? " done" : "") + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
+    '<div class="today-item' + (a.done ? " done" : "") + '" data-depth="' + depth + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
       '<input type="checkbox" data-action="home-toggle"' + (a.done ? " checked" : "") + '>' +
       '<div class="text">' + escapeAttr(a.text || "(untitled)") + '</div>' +
       '<div class="proj-tag" data-action="jump-to-project">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
@@ -2528,6 +2766,7 @@ async function loadStateFromCloud() {
     (byProject[a.project_id] = byProject[a.project_id] || []).push({
       id: a.id, text: a.text || '', done: !!a.done, status: a.status || null,
       priority: a.priority || 0, blocker: a.blocker || '', waitingFor: a.waiting_for || '',
+      parentId: a.parent_id || null,
       createdAt: a.created_at, updatedAt: a.updated_at, doneAt: a.done_at, stuckSince: a.stuck_since,
       labels: []
     });
@@ -2614,6 +2853,7 @@ async function flushDirty() {
       text: a.text || '', done: !!a.done, status: a.status || null,
       priority: a.priority || 0,
       blocker: a.blocker || '', waiting_for: a.waitingFor || '',
+      parent_id: a.parentId || null,
       position: loc.position,
       updated_at: a.updatedAt || new Date().toISOString(),
       done_at: a.doneAt || null, stuck_since: a.stuckSince || null
@@ -2682,6 +2922,7 @@ async function maybeMigrateLocalStorage() {
         text: a.text || '', done: !!a.done, status: a.status || null,
         priority: a.priority || 0,
         blocker: a.blocker || '', waiting_for: a.waitingFor || '',
+        parent_id: a.parentId || null,
         position: i,
         created_at: a.createdAt || new Date().toISOString(),
         updated_at: a.updatedAt || a.createdAt || new Date().toISOString(),
