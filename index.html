@@ -36,6 +36,28 @@
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-serif: 'Fraunces', Georgia, "Times New Roman", serif;
 }
+
+/* Warm mode — taupe / leather-toned variant of the same palette */
+body.warm-mode {
+  --bg: #2e2620;
+  --bg-deep: #261e19;
+  --card: #3a3029;
+  --card-hover: #463a32;
+  --border: #4c4138;
+  --border-strong: #5f5247;
+  --leather: #7d7065;
+  --text: #f1e9dc;
+  --text-2: #c4b8a8;
+  --text-3: #8a7d70;
+  --text-4: #5d5246;
+}
+body.warm-mode .daily-dashboard {
+  background: linear-gradient(135deg, #3a2e22 0%, var(--bg) 100%);
+}
+.sidebar-footer .btn.warm-mode-active {
+  color: var(--accent);
+  background: rgba(255, 107, 71, 0.08);
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: var(--font-sans);
@@ -1757,6 +1779,7 @@ ul.items li:hover .row-tool { opacity: 1; }
     </div>
     <input type="file" id="import-file" accept=".json" style="display:none;">
     <button class="btn" id="wd-settings-btn" title="Wind-down settings">Wind-down settings</button>
+    <button class="btn" id="warm-mode-btn" title="Toggle warm/taupe theme">Warm mode</button>
     <button class="btn" id="import-btn" title="Import projects from JSON">Import</button>
     <button class="btn" id="export-btn" title="Export projects as JSON">Export</button>
   </div>
@@ -1881,12 +1904,14 @@ if (state.deepWork.active && state.deepWork.startedAt) {
 // Morning Journal — date-keyed map of { q1, q2, q3, q4 }
 state.journal = state.journal || {};
 
-// Layout prefs (device-local) — currently just the project-card split %
-state.layout = state.layout || { projectSplit: 30 };
+// Layout prefs (device-local) — split % + warm-mode theme
+state.layout = state.layout || { projectSplit: 30, warmMode: false };
 if (typeof state.layout.projectSplit !== "number") state.layout.projectSplit = 30;
+if (typeof state.layout.warmMode !== "boolean") state.layout.warmMode = false;
 state.layout.projectSplit = Math.max(15, Math.min(70, state.layout.projectSplit));
-// Apply it now so first paint reflects the saved width
+// Apply it now so first paint reflects the saved width + theme
 document.documentElement.style.setProperty('--proj-split', state.layout.projectSplit + '%');
+if (state.layout.warmMode) document.body.classList.add('warm-mode');
 // Migrate older flat-shape filters (status/priority/statuses/labelIds at top level)
 // to the new per-view map. The old global filter is discarded — each view now
 // keeps its own filter selection, with "home" lazily defaulting to status="today".
@@ -4669,6 +4694,25 @@ document.getElementById("wd-settings-btn").addEventListener("click", () => {
     if (inp) inp.focus();
   }, 0);
 });
+
+// Warm-mode toggle — flips the palette to taupe and persists to localStorage
+(function () {
+  const btn = document.getElementById("warm-mode-btn");
+  if (!btn) return;
+  function reflect() {
+    const on = !!(state.layout && state.layout.warmMode);
+    btn.textContent = on ? "Warm mode ✓" : "Warm mode";
+    btn.classList.toggle("warm-mode-active", on);
+  }
+  reflect();
+  btn.addEventListener("click", () => {
+    state.layout = state.layout || {};
+    state.layout.warmMode = !state.layout.warmMode;
+    document.body.classList.toggle("warm-mode", state.layout.warmMode);
+    saveState();
+    reflect();
+  });
+})();
 
 // ─── Auth + Cloud Sync ─────────────────────────────────
 function showAuthScreen() {
