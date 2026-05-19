@@ -2122,6 +2122,7 @@ function startDeepWork() {
   };
   saveState();
   renderWindDown();
+  renderFilterBar(); // toggle the Start button visibility
 }
 function endDeepWork(opts) {
   const playChime = opts && opts.playChime;
@@ -2129,6 +2130,7 @@ function endDeepWork(opts) {
   saveState();
   if (playChime) playPeacefulChime();
   renderWindDown();
+  renderFilterBar();
 }
 
 // ─── Wind-down countdown ──────────────────────────────
@@ -2198,12 +2200,9 @@ function renderWindDown() {
     '</div>'
   ) : "";
 
-  const startBtn = '<button class="deep-corner-btn" id="deep-start-btn" title="Start a 75-minute focus session">Start deep work</button>';
-
   if (triggeredToday) {
     wrap.innerHTML =
       '<div class="wind-down done" id="wind-down-btn" title="Wound down for today">' +
-        startBtn +
         '<div class="wd-left">' +
           '<div class="wd-label">Wind-down complete</div>' +
           '<div class="wd-target">Triggered at ' + formatTargetLabel() + ' · click to adjust</div>' +
@@ -2220,7 +2219,6 @@ function renderWindDown() {
   wrap.innerHTML =
     '<div class="wind-down' + (urgent ? " urgent" : "") + '" id="wind-down-btn" ' +
       'title="Click to adjust">' +
-      startBtn +
       '<div class="wd-left">' +
         '<div class="wd-label">Time Until Wind-Down</div>' +
         '<div class="wd-target">at ' + formatTargetLabel() + ' · click to adjust</div>' +
@@ -2457,6 +2455,12 @@ function renderFilterBar() {
     { value: 3,    label: "High",   color: "#dc2626" }
   ];
   let leftHtml = "";
+  // Start-deep-work button leads the row, styled like "+ New project".
+  // Hidden while a focus session is already running.
+  if (!(state.deepWork && state.deepWork.active)) {
+    leftHtml += '<button class="btn accent" id="start-deep-work-btn" ' +
+      'title="Start a 75-minute focus session">Start deep work</button>';
+  }
   leftHtml += buildDropdownHtml("status",   "Status",   fs.status,   statusOpts);
   leftHtml += buildDropdownHtml("priority", "Priority", fs.priority, priorityOpts);
   if (isStatusFilterActive() || isPriorityFilterActive()) {
@@ -2466,6 +2470,14 @@ function renderFilterBar() {
   bar.innerHTML =
     '<div class="filter-bar-left">' + leftHtml + '</div>' +
     renderStatsStrip();
+
+  const sdb = document.getElementById("start-deep-work-btn");
+  if (sdb) {
+    sdb.addEventListener("click", (e) => {
+      e.stopPropagation();
+      startDeepWork();
+    });
+  }
 
   bar.querySelectorAll('.filter-dropdown-btn').forEach(btn => {
     btn.addEventListener("click", (e) => {
