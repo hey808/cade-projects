@@ -176,6 +176,9 @@ body {
   display: flex; justify-content: flex-end; align-items: center;
   gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
 }
+.header-deep {
+  display: inline-flex; align-items: center; gap: 12px;
+}
 
 /* Mobile: stack the layout */
 @media (max-width: 760px) {
@@ -369,6 +372,25 @@ input.search:focus + kbd { display: none; }
   background: rgba(255, 107, 71, 0.16);
   border-color: rgba(255, 107, 71, 0.45);
   color: var(--accent);
+}
+.sidebar-tab.home-tab {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  padding: 10px 12px;
+}
+.sidebar-tab.home-tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.20);
+  color: var(--text);
+}
+.sidebar-tab.home-tab.active {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--text);
 }
 .sidebar-divider {
   height: 1px;
@@ -772,6 +794,17 @@ body.journal-mode .filter-bar { display: none !important; }
   color: var(--text-2); padding: 5px 10px; font-size: 11px;
 }
 .btn.ghost:hover { background: var(--card-hover); color: var(--text); }
+.btn.subtle-action {
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-2);
+  padding: 7px 12px; font-size: 12px; font-weight: 500;
+}
+.btn.subtle-action:hover {
+  background: var(--card-hover);
+  border-color: var(--text-3);
+  color: var(--text);
+}
 .btn.add-line {
   background: transparent; border: 1px dashed var(--border-strong); color: var(--text-3);
   padding: 7px 11px; font-size: 12px; width: 100%; text-align: left;
@@ -1495,7 +1528,7 @@ ul.items li:hover .row-tool { opacity: 1; }
     <input type="text" class="search" id="search-input" placeholder="Search projects, actionables…">
     <kbd>⌘K</kbd>
   </div>
-  <button class="btn accent" id="new-project">+ New project</button>
+  <div id="header-deep" class="header-deep"></div>
 </header>
 
 <div class="hero-row">
@@ -2110,21 +2143,20 @@ function renderTabs() {
   }));
 
   let html = '';
-  // Morning Journal — daily reflection (sits above Home with its own treatment)
+  // Morning Journal — daily reflection
   html += '<div class="sidebar-tab-wrap">' +
     '<button class="sidebar-tab journal-tab' + (currentView === "journal" ? " active" : "") + '" data-view="journal">' +
       '<span class="name">Morning Journal</span>' +
     '</button>' +
   '</div>';
-  html += '<div class="sidebar-divider"></div>';
-  // Home (no color dot — it's the universal view)
+  // Home — universal task view, styled as a card to match the journal tab
   html += '<div class="sidebar-tab-wrap">' +
-    '<button class="sidebar-tab' + (currentView === "home" ? " active" : "") + '" data-view="home">' +
-      '<span class="dot" style="background:transparent;"></span>' +
+    '<button class="sidebar-tab home-tab' + (currentView === "home" ? " active" : "") + '" data-view="home">' +
       '<span class="name">Home</span>' +
       '<span class="pill">' + homeOpen + '</span>' +
     '</button>' +
   '</div>';
+  html += '<div class="sidebar-divider"></div>';
 
   if (state.labels.length === 0 && state.projects.length > 0) {
     html += '<div class="sidebar-tab-wrap">' +
@@ -2177,7 +2209,7 @@ function wireTabs() {
   // Tab click → switch view (but not if clicking the edit icon)
   tabsEl.querySelectorAll('.sidebar-tab').forEach(t => {
     const view = t.dataset.view;
-    const isLabel = !["home", "all", "uncategorized"].includes(view);
+    const isLabel = !["home", "all", "uncategorized", "journal"].includes(view);
 
     t.addEventListener('click', (e) => {
       if (e.target.closest('[data-tab-edit]')) return;
@@ -2375,6 +2407,39 @@ function deepWorkRemainingMs() {
   if (!state.deepWork || !state.deepWork.active || !state.deepWork.startedAt) return 0;
   return state.deepWork.durationMs - (Date.now() - state.deepWork.startedAt);
 }
+// Header cluster: Start/End deep work button + today's 3 session circles.
+// Lives in the page header so it persists across tabs.
+function renderHeaderDeep() {
+  const wrap = document.getElementById("header-deep");
+  if (!wrap) return;
+  const dwActive = !!(state.deepWork && state.deepWork.active);
+  const today = todayDateString();
+  const completedToday = (state.deepWork.completedDate === today)
+    ? (state.deepWork.completedToday || 0) : 0;
+  let circles = '<div class="deep-circles" title="' + completedToday + ' of 3 sessions today">';
+  for (let i = 0; i < 3; i++) {
+    circles += '<span class="dc' + (i < completedToday ? " filled" : "") + '"></span>';
+  }
+  circles += '</div>';
+  const deepBtn = '<button class="btn accent' + (dwActive ? " ending" : "") + '" id="deep-toggle-btn" ' +
+    'title="' + (dwActive ? "End the focus session" : "Start a 75-minute focus session") + '">' +
+    (dwActive ? "End deep work" : "Start deep work") +
+  '</button>';
+  wrap.innerHTML = circles + deepBtn;
+
+  const tgl = document.getElementById("deep-toggle-btn");
+  if (tgl) {
+    tgl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (state.deepWork && state.deepWork.active) {
+        endDeepWork({ playChime: false });
+      } else {
+        startDeepWork();
+      }
+    });
+  }
+}
+
 function startDeepWork() {
   unlockAudioCtx(); // user gesture — primes audio for the future chime
   state.deepWork = {
@@ -2384,7 +2449,7 @@ function startDeepWork() {
   };
   saveState();
   renderWindDown();
-  renderFilterBar(); // toggle the Start button visibility
+  renderHeaderDeep();
 }
 function endDeepWork(opts) {
   const playChime = opts && opts.playChime;
@@ -2404,7 +2469,7 @@ function endDeepWork(opts) {
   saveState();
   if (playChime) playPeacefulChime();
   renderWindDown();
-  renderFilterBar();
+  renderHeaderDeep();
 }
 
 // ─── Wind-down countdown ──────────────────────────────
@@ -2556,8 +2621,15 @@ function renderWindDown() {
     return;
   }
 
-  const target = getWindDownTargetToday();
-  const ms = target.getTime() - Date.now();
+  // Only count down while we're inside the start→end window. Otherwise
+  // the timer displays 0h 00m 00s and re-arms at the next start.
+  const startMs = getDayStartToday().getTime();
+  const target  = getWindDownTargetToday();
+  const targetMs = target.getTime();
+  const now = Date.now();
+  let ms;
+  if (now < startMs || now >= targetMs) ms = 0;
+  else                                   ms = targetMs - now;
   const urgent = ms > 0 && ms < 30 * 60 * 1000; // last 30 min
   wrap.innerHTML =
     '<div class="wind-down' + (urgent ? " urgent" : "") + '" id="wind-down-btn" ' +
@@ -2819,38 +2891,17 @@ function renderFilterBar() {
     leftHtml += '<button class="filter-clear" id="filter-clear-btn">Clear filters</button>';
   }
 
-  // Deep-work cluster lives on the far right, past the stats strip.
-  const dwActive = !!(state.deepWork && state.deepWork.active);
-  const today = todayDateString();
-  const completedToday = (state.deepWork.completedDate === today)
-    ? (state.deepWork.completedToday || 0) : 0;
-  let circles = '<div class="deep-circles" title="' + completedToday + ' of 3 sessions today">';
-  for (let i = 0; i < 3; i++) {
-    circles += '<span class="dc' + (i < completedToday ? " filled" : "") + '"></span>';
-  }
-  circles += '</div>';
-  const deepBtn = '<button class="btn accent' + (dwActive ? " ending" : "") + '" id="deep-toggle-btn" ' +
-    'title="' + (dwActive ? "End the focus session" : "Start a 75-minute focus session") + '">' +
-    (dwActive ? "End deep work" : "Start deep work") +
-  '</button>';
-  const deepCluster = '<div class="filter-bar-deep">' + circles + deepBtn + '</div>';
+  // "+ New project" sits on the far right of the filter bar — subtle ghost style
+  const newProjectBtn = '<button class="btn subtle-action" id="new-project-btn" ' +
+    'title="Create a new project">+ New project</button>';
 
   bar.innerHTML =
     '<div class="filter-bar-left">' + leftHtml + '</div>' +
     renderStatsStrip() +
-    deepCluster;
+    newProjectBtn;
 
-  const tgl = document.getElementById("deep-toggle-btn");
-  if (tgl) {
-    tgl.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (state.deepWork && state.deepWork.active) {
-        endDeepWork({ playChime: false });
-      } else {
-        startDeepWork();
-      }
-    });
-  }
+  // Deep-work toggle + session circles now live in the page header
+  renderHeaderDeep();
 
   bar.querySelectorAll('.filter-dropdown-btn').forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -3976,8 +4027,10 @@ document.getElementById("import-file").addEventListener("change", (e) => {
 });
 
 // ─── Init ──────────────────────────────────────────────
-document.getElementById("new-project").addEventListener("click", () => {
-  addProject();
+// New project button now lives inside the filter bar and is rebuilt every
+// render — use event delegation so we don't need to re-bind.
+document.addEventListener("click", (e) => {
+  if (e.target.closest("#new-project-btn")) addProject();
 });
 
 // ─── Auth + Cloud Sync ─────────────────────────────────
