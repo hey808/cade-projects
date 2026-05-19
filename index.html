@@ -371,16 +371,20 @@ input.search:focus + kbd { display: none; }
   margin: 10px 8px 10px;
 }
 
-/* Morning Journal view — one question at a time, centered */
-#journal-view { max-width: 720px; margin: 0 auto; padding: 8px 0 40px; }
+/* Morning Journal view — one question at a time, vertically centered */
+#journal-view {
+  max-width: 760px; margin: 0 auto; padding: 0;
+  min-height: calc(100vh - 84px);
+  display: flex; flex-direction: column; justify-content: center;
+}
 .journal-stepper {
-  display: flex; justify-content: center; gap: 10px;
-  margin-bottom: 36px;
+  display: flex; gap: 10px;
+  margin: 0;
 }
 .journal-stepper .step {
   width: 10px; height: 10px; border-radius: 50%;
   background: transparent; border: 1.5px solid var(--text-4);
-  cursor: pointer;
+  cursor: pointer; padding: 0;
   transition: background 0.2s, border-color 0.2s, transform 0.15s;
 }
 .journal-stepper .step:hover { border-color: var(--text-3); transform: scale(1.1); }
@@ -393,7 +397,6 @@ input.search:focus + kbd { display: none; }
 .journal-card {
   display: flex; flex-direction: column; align-items: center;
   gap: 22px;
-  min-height: 360px;
 }
 .journal-card .question-icon {
   display: flex; align-items: center; justify-content: center;
@@ -423,10 +426,15 @@ input.search:focus + kbd { display: none; }
 .journal-card textarea:focus { outline: none; border-color: var(--accent); }
 .journal-card textarea::placeholder { color: var(--text-4); font-style: italic; }
 .journal-nav {
-  display: flex; justify-content: space-between; align-items: center;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
   width: 100%; max-width: 640px;
   margin-top: 4px;
 }
+.journal-nav > .nav-btn:first-child { justify-self: start; }
+.journal-nav > .journal-stepper     { justify-self: center; }
+.journal-nav > .nav-btn:last-child  { justify-self: end; }
 .journal-nav .nav-btn {
   background: transparent; border: 1px solid var(--border-strong);
   color: var(--text-2);
@@ -448,7 +456,6 @@ input.search:focus + kbd { display: none; }
 body.journal-mode header,
 body.journal-mode .hero-row,
 body.journal-mode .filter-bar { display: none !important; }
-body.journal-mode #journal-view { padding-top: 20px; }
 
 /* Journal review (read-only summary shown after submit) */
 .journal-review {
@@ -3619,13 +3626,13 @@ function renderJournal() {
   const iconHtml = JOURNAL_ICONS[q.icon] || "";
 
   container.innerHTML =
-    '<div class="journal-stepper">' + steps + '</div>' +
     '<div class="journal-card">' +
       '<div class="question-icon">' + iconHtml + '</div>' +
       '<div class="question">' + q.text + '</div>' +
       '<textarea id="journal-textarea" placeholder="Write…">' + escapeAttr(value) + '</textarea>' +
       '<div class="journal-nav">' +
         '<button class="nav-btn" id="journal-prev"' + prevDisabled + '>← Previous</button>' +
+        '<div class="journal-stepper">' + steps + '</div>' +
         '<button class="nav-btn primary" id="journal-next">' +
           (isLast ? "Submit" : "Next →") +
         '</button>' +
