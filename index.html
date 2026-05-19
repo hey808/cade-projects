@@ -59,6 +59,77 @@ body.light-mode::before {
   mix-blend-mode: multiply;
   opacity: 0.04;
 }
+
+/* Professional mode — strict black/gray/white, Inter for everything */
+body.professional-mode {
+  --bg: #0F0F0F;
+  --bg-deep: #080808;
+  --card: #1A1A1A;
+  --card-hover: #242424;
+  --border: #2A2A2A;
+  --border-strong: #3D3D3D;
+  --leather: #6E6E6E;
+  --text: #F0F0F0;
+  --text-2: #B0B0B0;
+  --text-3: #7E7E7E;
+  --text-4: #555555;
+  --accent: #F0F0F0;
+  /* Swap Fraunces for Inter so nothing reads as serif */
+  --font-serif: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+body.professional-mode::before { opacity: 0.03; }
+body.professional-mode .daily-dashboard {
+  background: linear-gradient(135deg, #1F1F1F 0%, var(--bg) 100%);
+  border-color: rgba(240, 240, 240, 0.15);
+}
+/* Replace orange-tinted accents with neutral white-tinted ones */
+body.professional-mode .keystone-card {
+  background: linear-gradient(135deg, rgba(240,240,240,0.05), rgba(240,240,240,0.01));
+  border-color: rgba(240, 240, 240, 0.18);
+}
+body.professional-mode .keystone-label,
+body.professional-mode .keystone-input::placeholder { color: var(--text-2); }
+body.professional-mode .wind-down {
+  background: linear-gradient(135deg, rgba(240,240,240,0.06), rgba(240,240,240,0.01));
+  border-color: rgba(240, 240, 240, 0.18);
+}
+body.professional-mode .wind-down:hover { border-color: rgba(240,240,240,0.35); }
+body.professional-mode .wind-down .wd-label,
+body.professional-mode .wind-down .wd-time { color: var(--text); }
+body.professional-mode .status-chip.today {
+  background: rgba(240,240,240,0.10); color: var(--text); border-color: rgba(240,240,240,0.35);
+}
+body.professional-mode .btn.accent {
+  background: var(--text); color: var(--bg); border-color: var(--text);
+}
+body.professional-mode .btn.accent:hover { background: var(--text-2); }
+body.professional-mode .btn.accent.ending {
+  background: transparent; color: var(--text); border: 1px solid var(--text);
+}
+body.professional-mode .btn.accent.ending:hover { background: rgba(240,240,240,0.10); }
+body.professional-mode .sidebar-tab.journal-tab {
+  background: rgba(240,240,240,0.04);
+  border-color: rgba(240,240,240,0.14);
+  color: var(--text-2);
+}
+body.professional-mode .sidebar-tab.journal-tab:hover {
+  background: rgba(240,240,240,0.08);
+  border-color: rgba(240,240,240,0.28);
+  color: var(--text);
+}
+body.professional-mode .sidebar-tab.journal-tab.active {
+  background: rgba(240,240,240,0.14);
+  border-color: rgba(240,240,240,0.40);
+  color: var(--text);
+}
+body.professional-mode .deep-circles .dc.filled {
+  background: var(--text); border-color: var(--text);
+}
+body.professional-mode .journal-prior { border-left-color: var(--border-strong); }
+body.professional-mode .journal-review .entry .q { color: var(--text-2); }
+body.professional-mode .filter-dropdown-btn.active { border-color: var(--text-3); }
+body.professional-mode .meta-badge.level-warn,
+body.professional-mode .meta-badge.level-bad { color: var(--text-2); background: transparent; }
 /* Settings modal: section + theme toggle pills */
 .settings-section { margin-bottom: 18px; }
 .settings-section:last-child { margin-bottom: 0; }
@@ -743,9 +814,8 @@ input.search:focus + kbd { display: none; }
 
 /* Review screen task creator */
 .journal-tasks {
-  margin-top: 20px; margin-bottom: 24px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border);
+  margin-top: 18px;
+  margin-bottom: 28px;
 }
 .journal-tasks h3 {
   font-family: var(--font-serif); font-weight: 500;
@@ -2056,19 +2126,20 @@ if (state.deepWork.active && state.deepWork.startedAt) {
 // Morning Journal — date-keyed map of { q1, q2, q3, q4 }
 state.journal = state.journal || {};
 
-// Layout prefs (device-local) — split % + light-mode theme
-state.layout = state.layout || { projectSplit: 30, lightMode: false };
-// Migrate the old warmMode flag if it's still hanging around
-if (state.layout.warmMode === true && typeof state.layout.lightMode !== "boolean") {
-  state.layout.lightMode = false; // don't auto-apply old warm preference to new light mode
-}
+// Layout prefs (device-local) — split % + theme ("cool" | "light" | "professional")
+state.layout = state.layout || { projectSplit: 30, theme: "cool" };
+// Migrate older flags
+if (state.layout.lightMode === true && !state.layout.theme) state.layout.theme = "light";
+delete state.layout.lightMode;
 delete state.layout.warmMode;
+if (!["cool", "light", "professional"].includes(state.layout.theme)) state.layout.theme = "cool";
 if (typeof state.layout.projectSplit !== "number") state.layout.projectSplit = 30;
-if (typeof state.layout.lightMode !== "boolean") state.layout.lightMode = false;
 state.layout.projectSplit = Math.max(15, Math.min(70, state.layout.projectSplit));
 // Apply it now so first paint reflects the saved width + theme
 document.documentElement.style.setProperty('--proj-split', state.layout.projectSplit + '%');
-if (state.layout.lightMode) document.body.classList.add('light-mode');
+document.body.classList.remove('light-mode', 'professional-mode');
+if (state.layout.theme === 'light')        document.body.classList.add('light-mode');
+if (state.layout.theme === 'professional') document.body.classList.add('professional-mode');
 // Migrate older flat-shape filters (status/priority/statuses/labelIds at top level)
 // to the new per-view map. The old global filter is discarded — each view now
 // keeps its own filter selection, with "home" lazily defaulting to status="today".
@@ -3171,7 +3242,7 @@ function renderWindDownModal() {
   if (!wrap) return;
   if (!activeWindDownEditor) { wrap.innerHTML = ""; return; }
   const inEarned = windDownPhase() === "earned";
-  const lightOn = !!(state.layout && state.layout.lightMode);
+  const theme = (state.layout && state.layout.theme) || "cool";
   const undoHtml = inEarned
     ? '<button class="wd-undo-btn" id="wd-undo-btn" title="Undo today\'s wind-down — resume the day">Undo today\'s wind-down</button>'
     : '';
@@ -3184,8 +3255,9 @@ function renderWindDownModal() {
         '<div class="settings-section">' +
           '<div class="wd-title">Appearance</div>' +
           '<div class="theme-toggle">' +
-            '<button class="theme-opt' + (lightOn ? "" : " active") + '" data-theme="cool">Cool</button>' +
-            '<button class="theme-opt' + (lightOn ? " active" : "") + '" data-theme="light">Light</button>' +
+            '<button class="theme-opt' + (theme === "cool" ? " active" : "") + '" data-theme="cool">Cool</button>' +
+            '<button class="theme-opt' + (theme === "light" ? " active" : "") + '" data-theme="light">Light</button>' +
+            '<button class="theme-opt' + (theme === "professional" ? " active" : "") + '" data-theme="professional">Professional</button>' +
           '</div>' +
         '</div>' +
 
@@ -3230,10 +3302,11 @@ function wireWindDown() {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       const target = btn.dataset.theme;
-      const want = target === "light";
       state.layout = state.layout || {};
-      state.layout.lightMode = want;
-      document.body.classList.toggle("light-mode", want);
+      state.layout.theme = target;
+      document.body.classList.remove("light-mode", "professional-mode");
+      if (target === "light")        document.body.classList.add("light-mode");
+      if (target === "professional") document.body.classList.add("professional-mode");
       saveState();
       renderWindDownModal(); // re-render so the active pill updates
     });
@@ -4807,7 +4880,7 @@ function renderJournal() {
           '<div class="review-sub">' + dateLabel + '</div>' +
         '</div>' +
         '<div class="journal-tasks">' +
-          '<h3>Let\'s Get Started</h3>' +
+          '<h3>Get After It</h3>' +
           creatorHtml +
         '</div>' +
         entries +
