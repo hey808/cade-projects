@@ -1503,7 +1503,10 @@ ul.items li:hover .row-tool { opacity: 1; }
   display: flex; align-items: center; gap: 10px;
   background: var(--card); border: 1px solid var(--border);
   border-radius: 8px; padding: 10px 12px;
+  flex-wrap: wrap;
 }
+.today-item .status-wrap { margin-left: auto; }
+.today-item .context-row { flex-basis: 100%; margin-left: 26px; }
 .today-item input[type="checkbox"] {
   accent-color: var(--good); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;
 }
@@ -2903,12 +2906,11 @@ function renderWindDown() {
 
   const phase = windDownPhase();
 
-  // Earned state — full-bleed message, no circle, one line, with Undo button
+  // Earned state — full-bleed message, no circle, one line, centered
   if (phase === "earned") {
     wrap.innerHTML =
       '<div class="wind-down earned" id="wind-down-btn">' +
         '<div class="wd-earned-headline">Wind down, you earned it</div>' +
-        '<button class="wd-undo-btn" id="wd-undo-btn" title="Undo wind-down — resume the day">Undo</button>' +
       '</div>';
     wireWindDown();
     return;
@@ -2951,6 +2953,10 @@ function renderWindDownModal() {
   const wrap = document.getElementById("wd-modal-wrap");
   if (!wrap) return;
   if (!activeWindDownEditor) { wrap.innerHTML = ""; return; }
+  const inEarned = windDownPhase() === "earned";
+  const undoHtml = inEarned
+    ? '<button class="wd-undo-btn" id="wd-undo-btn" title="Undo today\'s wind-down — resume the day">Undo today\'s wind-down</button>'
+    : '';
   wrap.innerHTML =
     '<div class="wind-down-popover-backdrop" id="wd-modal-backdrop">' +
       '<div class="wind-down-popover" id="wind-down-popover">' +
@@ -2966,6 +2972,7 @@ function renderWindDownModal() {
                       String(state.windDown.minute).padStart(2, "0") + '">' +
         '<div class="wd-hint">When the countdown hits zero, every open <strong>Today</strong> task has its status cleared so tomorrow starts blank.</div>' +
         '<button class="wd-trigger" id="wd-trigger-now">Wind down now</button>' +
+        undoHtml +
       '</div>' +
     '</div>';
   wireWindDown();
@@ -2997,6 +3004,9 @@ function wireWindDown() {
       state.windDown.lastTriggeredDate = null;
       markPrefsDirty();
       saveState();
+      // Dismiss the modal so the user sees the card transition back
+      activeWindDownEditor = false;
+      renderWindDownModal();
       renderWindDown();
     });
   }
@@ -4065,11 +4075,32 @@ function wireKeystone() {
 
 function renderHomeItem(p, a, depth) {
   depth = depth || 0;
+  // Inline status chip + picker, same as the project view
+  const statusChipHtml   = renderStatusChip(p, a);
+  const statusPickerHtml = renderStatusPicker(p, a);
+  let contextRow = "";
+  if (a.status === "stuck") {
+    contextRow =
+      '<div class="context-row stuck">' +
+        '<span class="lbl">Blocker:</span>' +
+        '<input type="text" data-action="update-blocker" ' +
+          'placeholder="What\'s in the way?" value="' + escapeAttr(a.blocker || "") + '">' +
+      '</div>';
+  } else if (a.status === "waiting") {
+    contextRow =
+      '<div class="context-row waiting">' +
+        '<span class="lbl">Waiting for:</span>' +
+        '<input type="text" data-action="update-waiting-for" ' +
+          'placeholder="Who or what?" value="' + escapeAttr(a.waitingFor || "") + '">' +
+      '</div>';
+  }
   return (
     '<div class="today-item' + (a.done ? " done" : "") + '" data-depth="' + depth + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
       '<input type="checkbox" data-action="home-toggle"' + (a.done ? " checked" : "") + '>' +
       '<div class="text">' + escapeAttr(a.text || "(untitled)") + '</div>' +
+      '<div class="status-wrap">' + statusChipHtml + statusPickerHtml + '</div>' +
       '<div class="proj-tag" data-action="jump-to-project">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
+      contextRow +
     '</div>'
   );
 }
@@ -4082,6 +4113,44 @@ function wireHomeView() {
       updateActionable(wrap.dataset.projectId, wrap.dataset.itemId, "done", cb.checked);
       renderAll();
     });
+  });
+  // Status chip → toggle picker
+  container.querySelectorAll('[data-action="open-status-picker"]').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wrap = btn.closest('.today-item');
+      if (!wrap) return;
+      const key = wrap.dataset.projectId + ":" + wrap.dataset.itemId;
+      activeStatusPicker = activeStatusPicker === key ? null : key;
+      renderHome();
+    });
+  });
+  // Status picker → set or clear status
+  container.querySelectorAll('[data-action="set-status"]').forEach(opt => {
+    opt.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wrap = opt.closest('.today-item');
+      if (!wrap) return;
+      const status = opt.dataset.status || null;
+      setActionableStatus(wrap.dataset.projectId, wrap.dataset.itemId, status);
+      activeStatusPicker = null;
+      // setActionableStatus calls renderAll
+    });
+  });
+  // Blocker / waiting-for context inputs
+  container.querySelectorAll('input[data-action="update-blocker"]').forEach(inp => {
+    inp.addEventListener("input", () => {
+      const wrap = inp.closest('.today-item');
+      updateActionable(wrap.dataset.projectId, wrap.dataset.itemId, "blocker", inp.value);
+    });
+    inp.addEventListener("click", (e) => e.stopPropagation());
+  });
+  container.querySelectorAll('input[data-action="update-waiting-for"]').forEach(inp => {
+    inp.addEventListener("input", () => {
+      const wrap = inp.closest('.today-item');
+      updateActionable(wrap.dataset.projectId, wrap.dataset.itemId, "waitingFor", inp.value);
+    });
+    inp.addEventListener("click", (e) => e.stopPropagation());
   });
   container.querySelectorAll('[data-action="jump-to-project"]').forEach(tag => {
     tag.addEventListener("click", () => {
