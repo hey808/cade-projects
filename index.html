@@ -4678,6 +4678,7 @@ function renderActionable(p, a, depth) {
     '<li data-item-id="' + a.id + '" data-depth="' + depth + '" class="' + (a.done ? "done" : "") + todayCls + '">' +
       '<div class="item-row">' +
         '<input type="checkbox" data-action="toggle-actionable"' + (a.done ? " checked" : "") + '>' +
+        subtaskBtn +
         '<input type="text" class="item-text" data-action="update-actionable" ' +
           'placeholder="What needs to be done?" value="' + escapeAttr(a.text) + '">' +
         ageBadge +
@@ -4686,7 +4687,6 @@ function renderActionable(p, a, depth) {
           renderStatusChip(p, a) +
           renderStatusPicker(p, a) +
         '</div>' +
-        subtaskBtn +
         gcalBtn +
         notesBtn +
         archiveBtn +
