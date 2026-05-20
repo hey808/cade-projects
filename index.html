@@ -1684,15 +1684,22 @@ ul.items > li[data-depth="1"]::before { left: 16px; }
 ul.items > li[data-depth="1"]::after  { left: 16px; }
 ul.items > li[data-depth="2"]::before { left: 40px; }
 ul.items > li[data-depth="2"]::after  { left: 40px; }
-ul.items > li[data-depth="1"] > .item-row::before,
-ul.items > li[data-depth="2"] > .item-row::before {
-  content: ""; position: absolute; top: 50%; width: 10px; height: 1px;
-  background: var(--border-strong);
-}
-ul.items > li[data-depth="1"] > .item-row::before { left: 10px; }
-ul.items > li[data-depth="2"] > .item-row::before { left: 34px; }
 ul.items > li[data-depth="1"] > .item-row,
 ul.items > li[data-depth="2"] > .item-row { position: relative; }
+/* The indent guide line is a clickable control that archives the subtask. */
+.indent-archive {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 16px; height: 16px; padding: 0; margin: 0; border: none;
+  background: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+ul.items > li[data-depth="1"] > .item-row > .indent-archive { left: 7px; }
+ul.items > li[data-depth="2"] > .item-row > .indent-archive { left: 31px; }
+.indent-archive::before {
+  content: ""; width: 10px; height: 1px; background: var(--border-strong);
+  border-radius: 1px; transition: background 0.15s, height 0.15s;
+}
+.indent-archive:hover::before { background: var(--accent); height: 2px; }
 
 .item-row {
   display: flex; align-items: center; gap: 6px;
@@ -3109,6 +3116,11 @@ function archiveActionable(projId, itemId) {
   const p = findProject(projId); if (!p) return;
   const target = findActionable(p, itemId);
   if (!target) return;
+  // A blank task/subtask isn't worth keeping — archiving it just deletes it.
+  if (!(target.text && target.text.trim())) {
+    removeActionable(projId, itemId);
+    return;
+  }
   // Archive the item plus its descendants — they hide together
   const ids = new Set(getDescendants(p, target).map(d => d.id));
   ids.add(itemId);
@@ -4695,6 +4707,9 @@ function renderActionable(p, a, depth) {
   return (
     '<li data-item-id="' + a.id + '" data-depth="' + depth + '" class="' + (a.done ? "done" : "") + todayCls + '">' +
       '<div class="item-row">' +
+        (depth > 0
+          ? '<button class="indent-archive" data-action="archive-actionable" title="Archive this subtask"></button>'
+          : "") +
         '<input type="checkbox" data-action="toggle-actionable"' + (a.done ? " checked" : "") + '>' +
         subtaskBtn +
         '<input type="text" class="item-text" data-action="update-actionable" ' +
