@@ -97,9 +97,18 @@ body.professional-mode .wind-down {
 body.professional-mode .wind-down:hover { border-color: rgba(240,240,240,0.35); }
 body.professional-mode .wind-down .wd-label,
 body.professional-mode .wind-down .wd-time { color: var(--text); }
-body.professional-mode .status-chip.today {
-  background: rgba(240,240,240,0.10); color: var(--text); border-color: rgba(240,240,240,0.35);
+body.professional-mode .status-chip.today,
+body.professional-mode .status-chip.in_progress {
+  background: rgba(240,240,240,0.10); color: var(--text); border-color: rgba(240,240,240,0.45);
 }
+/* Today toggle (row pill) + Today filter toggle go grayscale */
+body.professional-mode .today-toggle.on {
+  background: rgba(240,240,240,0.12); color: var(--text); border-color: rgba(240,240,240,0.45);
+}
+body.professional-mode .filter-toggle.active {
+  background: rgba(240,240,240,0.10); color: var(--text); border-color: rgba(240,240,240,0.45);
+}
+body.professional-mode .filter-toggle.active .dot { background: var(--text); }
 body.professional-mode .btn.accent {
   background: var(--text); color: var(--bg); border-color: var(--text);
 }
@@ -1212,7 +1221,7 @@ body.journal-mode .filter-bar { display: none !important; }
 /* Filter bar — filters on the left, metrics centered, new-project on the right */
 .filter-bar {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 12px;
   padding: 0 0 14px;
@@ -1220,7 +1229,7 @@ body.journal-mode .filter-bar { display: none !important; }
   border-bottom: 1px solid var(--border);
 }
 .filter-bar-left {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
   justify-self: start;
 }
 .filter-bar-stats {
@@ -1304,13 +1313,14 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 
 .filter-clear {
-  display: inline-flex; align-items: center;
-  height: 34px; padding: 0 13px;
-  font-size: 12px; font-weight: 500; color: var(--text-3);
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 34px; width: 34px; padding: 0;
+  color: var(--text-3);
   background: transparent; border: 1px solid var(--border);
   border-radius: 7px; cursor: pointer; font-family: inherit;
-  white-space: nowrap;
+  flex-shrink: 0;
 }
+.filter-clear svg { width: 15px; height: 15px; }
 .filter-clear:hover { color: var(--text); border-color: var(--border-strong); }
 
 /* Buttons */
@@ -3856,7 +3866,13 @@ function renderFilterBar() {
   leftHtml += buildDropdownHtml("status", "Status", fs.status, statusOpts);
   leftHtml += buildDropdownHtml("age", "Age", fs.age, ageOpts);
   if (isStatusFilterActive() || isTodayFilterActive() || isAgeFilterActive()) {
-    leftHtml += '<button class="filter-clear" id="filter-clear-btn">Clear filters</button>';
+    leftHtml += '<button class="filter-clear" id="filter-clear-btn" title="Clear filters">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+        'stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M3 4h18l-7 8v6l-4 2v-8z"/>' +
+        '<line x1="15.5" y1="3.5" x2="21.5" y2="9.5"/>' +
+        '<line x1="21.5" y1="3.5" x2="15.5" y2="9.5"/>' +
+      '</svg></button>';
   }
 
   // Right side of the filter bar: deep-work cluster + New project button
