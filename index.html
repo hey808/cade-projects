@@ -789,6 +789,18 @@ input.search:focus + kbd { display: none; }
   max-width: 640px;
   font-variation-settings: "opsz" 72;
 }
+.journal-cal-sub {
+  font-size: 14px; color: var(--text-3);
+  text-align: center; margin-top: -8px;
+}
+.journal-cal {
+  width: 100%; max-width: 640px;
+  border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; background: #fff;
+}
+.journal-cal iframe {
+  width: 100%; height: 340px; border: 0; display: block;
+}
 .journal-card textarea {
   width: 100%; max-width: 640px;
   background: var(--card); border: 1px solid var(--border);
@@ -5382,7 +5394,14 @@ const JOURNAL_QUESTIONS = [
   { key: "q4", icon: "target",
     text: "What's the smallest thing you can do right now to get a win?" }
 ];
-let journalStep = 0;           // Currently visible question (0..3)
+// Google Calendar embed shown on the final journal step ("Anything to add?").
+// Agenda mode = today's upcoming events as a list. The calendar must be
+// shared "public / see all details" for the embed to show events.
+const CALENDAR_EMBED_URL = "https://calendar.google.com/calendar/embed?" +
+  "src=hey%40cadecrowley.com&ctz=America%2FNew_York&mode=AGENDA" +
+  "&showTitle=0&showPrint=0&showCalendars=0&showTz=0&showNav=1&showDate=1";
+
+let journalStep = 0;           // Currently visible step: 0..3 questions, 4 = calendar
 let journalReviewMode = false; // After Submit, show read-only review
 let journalStarted = false;    // false → show the "Let's have a good day" start screen
 let journalCreatedTaskIds = []; // ids of actionables added via the review screen this session
@@ -5529,21 +5548,43 @@ function renderJournal() {
     return;
   }
 
-  if (journalStep < 0 || journalStep >= JOURNAL_QUESTIONS.length) journalStep = 0;
-  const q = JOURNAL_QUESTIONS[journalStep];
-  const value = entry[q.key] || "";
+  const calStep = JOURNAL_QUESTIONS.length; // index of the calendar step (4)
+  if (journalStep < 0 || journalStep > calStep) journalStep = 0;
 
-  const steps = JOURNAL_QUESTIONS.map((qq, i) => {
+  // Stepper dots: one per question + a final calendar dot
+  let steps = JOURNAL_QUESTIONS.map((qq, i) => {
     const filled = (entry[qq.key] || "").trim().length > 0;
     const active = i === journalStep;
     const cls = "step" + (active ? " active" : (filled ? " filled" : ""));
     return '<button class="' + cls + '" data-step="' + i + '" ' +
       'title="Question ' + (i + 1) + (filled ? " · answered" : "") + '"></button>';
   }).join("");
+  steps += '<button class="step' + (journalStep === calStep ? " active" : "") + '" ' +
+    'data-step="' + calStep + '" title="Calendar"></button>';
 
-  const isLast = journalStep === JOURNAL_QUESTIONS.length - 1;
   const prevDisabled = journalStep === 0 ? " disabled" : "";
 
+  // ── Final step: calendar view ──
+  if (journalStep === calStep) {
+    container.innerHTML =
+      '<div class="journal-card">' +
+        '<div class="question">Anything to add?</div>' +
+        '<div class="journal-cal-sub">Here\'s what\'s on your calendar today.</div>' +
+        '<div class="journal-cal">' +
+          '<iframe src="' + CALENDAR_EMBED_URL + '" frameborder="0" scrolling="no" loading="lazy"></iframe>' +
+        '</div>' +
+        '<div class="journal-nav">' +
+          '<button class="nav-btn" id="journal-prev">← Previous</button>' +
+          '<div class="journal-stepper">' + steps + '</div>' +
+          '<button class="nav-btn primary" id="journal-next">Submit</button>' +
+        '</div>' +
+      '</div>';
+    wireJournal();
+    return;
+  }
+
+  const q = JOURNAL_QUESTIONS[journalStep];
+  const value = entry[q.key] || "";
   const iconHtml = JOURNAL_ICONS[q.icon] || "";
 
   // Only the immediately previous question + answer, grayed for context,
@@ -5570,9 +5611,7 @@ function renderJournal() {
       '<div class="journal-nav">' +
         '<button class="nav-btn" id="journal-prev"' + prevDisabled + '>← Previous</button>' +
         '<div class="journal-stepper">' + steps + '</div>' +
-        '<button class="nav-btn primary" id="journal-next">' +
-          (isLast ? "Submit" : "Next →") +
-        '</button>' +
+        '<button class="nav-btn primary" id="journal-next">Next →</button>' +
       '</div>' +
     '</div>';
   wireJournal();
@@ -5722,10 +5761,10 @@ function wireJournal() {
   });
   const next = container.querySelector('#journal-next');
   if (next) next.addEventListener("click", () => {
-    if (journalStep < JOURNAL_QUESTIONS.length - 1) {
+    // Steps go 0..3 (questions) then 4 (calendar). Submit from the calendar step.
+    if (journalStep < JOURNAL_QUESTIONS.length) {
       journalStep++; renderJournal();
     } else {
-      // Submitting the last answer → flip to read-only review
       journalReviewMode = true;
       renderJournal();
     }
