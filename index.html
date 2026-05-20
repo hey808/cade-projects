@@ -2026,6 +2026,18 @@ ul.items li:hover .row-tool { opacity: 1; }
   font-size: 12px; font-weight: 600; color: #c98a00;
   letter-spacing: 0.01em;
 }
+/* Pinned "one thing" section at the top of Home */
+.focus-section { margin-bottom: 22px; }
+.focus-section-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #c98a00; margin-bottom: 8px;
+}
+.focus-section .today-item.focus {
+  border-width: 1.5px;
+  background: rgba(245, 179, 1, 0.12);
+  box-shadow: 0 1px 8px rgba(245, 179, 1, 0.12);
+  padding: 14px 16px;
+}
 
 /* Archive view */
 .archive-header { margin-bottom: 22px; }
@@ -3136,15 +3148,15 @@ function toggleTodayFlag(projId, itemId) {
 // Exactly one task across all projects can be the focus. While one is set, the
 // star button hides on every other task — you commit to it until it's done.
 let currentFocusId = null; // recomputed each Home render
-function focusTaskId() {
-  let id = null;
+function getFocusTask() {
+  let res = null;
   state.projects.forEach(p => {
     if (p.archived) return;
     p.actionables.forEach(a => {
-      if (a.focus && !a.archived && !a.done) id = a.id;
+      if (a.focus && !a.archived && !a.done) res = { project: p, item: a };
     });
   });
-  return id;
+  return res;
 }
 function clearAllFocus() {
   state.projects.forEach(p => p.actionables.forEach(a => {
@@ -5133,9 +5145,19 @@ function todayDateString() {
 function renderHome() {
   const container = document.getElementById("home-list-container");
 
-  currentFocusId = focusTaskId();
+  const focus = getFocusTask();
+  currentFocusId = focus ? focus.item.id : null;
   const ok = (a) => passesAllItemFilters(a);
   const filters = getCurrentFilters();
+
+  // The chosen "one thing" gets its own gold section pinned to the top, shown
+  // regardless of the current filters and excluded from the list below.
+  const focusSection = focus
+    ? '<div class="focus-section">' +
+        '<div class="focus-section-label">★ Your one thing</div>' +
+        renderHomeItem(focus.project, focus.item, 0) +
+      '</div>'
+    : "";
   const filterActive = filters.status !== null || filters.today === true || filters.age !== null;
 
   const emptyMsg = () => {
@@ -5160,18 +5182,21 @@ function renderHome() {
     activeProjects().forEach(p => {
       p.actionables.forEach(a => {
         if (a.archived || !ok(a)) return;
+        if (currentFocusId && a.id === currentFocusId) return; // shown in the focus section
         flat.push({ project: p, item: a });
       });
     });
-    if (flat.length === 0) {
+    if (flat.length === 0 && !focus) {
       container.innerHTML = '<div class="empty-state">' + emptyMsg() + '</div>';
       return;
     }
     flat.sort((x, y) => cmp(x.item, y.item));
-    container.innerHTML =
-      '<div class="today-group"><div class="today-list">' +
-        flat.map(e => renderHomeItem(e.project, e.item, 0)).join("") +
-      '</div></div>';
+    const listHtml = flat.length
+      ? '<div class="today-group"><div class="today-list">' +
+          flat.map(e => renderHomeItem(e.project, e.item, 0)).join("") +
+        '</div></div>'
+      : "";
+    container.innerHTML = focusSection + listHtml;
     wireHomeView();
     return;
   }
