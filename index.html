@@ -5589,21 +5589,26 @@ function yesterdayDateString() {
   d.setDate(d.getDate() - 1);
   return dateStrOf(d);
 }
-// Tasks whose Today flag was cleared at yesterday's wind-down and haven't been
+// Tasks whose Today flag was cleared at a previous wind-down and haven't been
 // completed/archived since — surfaced in the morning journal so the user can
-// re-add them. Re-added items stay in the list (marked "Added") so the list
-// doesn't shift under the user mid-review.
+// re-add them. We show only the most recent expiration batch (so a weekend or
+// skipped day still surfaces, without dragging along weeks-old leftovers).
+// Re-added items stay in the list (marked "Added") so it doesn't shift mid-review.
 function getExpiredTodayTasks() {
-  const y = yesterdayDateString();
-  const out = [];
+  const today = todayDateString();
+  const cand = [];
   state.projects.forEach(p => {
     p.actionables.forEach(a => {
       if (a.archived || a.done) return;
       if (!a.todayExpiredAt) return;
-      if (dateStrOf(a.todayExpiredAt) === y) out.push({ project: p, item: a });
+      const d = dateStrOf(a.todayExpiredAt);
+      if (d >= today) return;            // ignore clears from today itself
+      cand.push({ project: p, item: a, day: d });
     });
   });
-  return out;
+  if (!cand.length) return [];
+  const latest = cand.reduce((m, c) => (c.day > m ? c.day : m), cand[0].day);
+  return cand.filter(c => c.day === latest).map(c => ({ project: c.project, item: c.item }));
 }
 function renderJournal() {
   const container = document.getElementById("journal-container");
@@ -5773,7 +5778,7 @@ function renderJournal() {
     container.innerHTML =
       '<div class="journal-card">' +
         '<div class="question">Want to add these to your list today?</div>' +
-        '<div class="journal-cal-sub">These dropped off your today list at yesterday\'s wind-down.</div>' +
+        '<div class="journal-cal-sub">These dropped off your today list at your last wind-down.</div>' +
         '<div class="expired-list">' + rows + '</div>' +
         '<div class="journal-nav">' +
           '<button class="nav-btn" id="journal-prev">← Previous</button>' +
