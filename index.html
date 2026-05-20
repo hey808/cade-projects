@@ -1521,6 +1521,15 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 .project:hover .delete-btn { opacity: 1; }
 .project .delete-btn:hover { color: var(--bad); background: rgba(239, 68, 68, 0.1); }
+.project .archive-btn {
+  position: absolute; top: -4px; right: 0;
+  background: none; border: none; color: var(--text-4);
+  cursor: pointer; padding: 4px 9px; font-size: 12px;
+  border-radius: 5px; font-family: inherit;
+  opacity: 0; transition: opacity 0.15s;
+}
+.project:hover .archive-btn { opacity: 1; }
+.project .archive-btn:hover { color: var(--accent); background: var(--card-hover); }
 
 /* Left column: project name + meta (delete sits inside this column now) */
 .proj-header { min-width: 0; padding-right: 50px; position: relative; }
@@ -2619,6 +2628,8 @@ const NOW = new Date().toISOString();
 state.projects.forEach(p => {
   if (p.labelId === undefined) p.labelId = null;
   if (!p.createdAt) p.createdAt = NOW;
+  if (typeof p.archived !== "boolean") p.archived = false;
+  if (p.archivedAt === undefined) p.archivedAt = null;
   (p.actionables || []).forEach(a => {
     // Convert legacy labels array to single status
     if (a.status === undefined) {
@@ -2886,12 +2897,15 @@ function withAncestors(p, items) {
   return p.actionables.filter(a => ids.has(a.id));
 }
 
+// Projects that should appear in active views (archived ones live in Archive)
+function activeProjects() { return state.projects.filter(p => !p.archived); }
+
 // View → project filter (tab is the category)
 function projectsInCurrentView() {
   if (currentView === "home") return [];
-  if (currentView === "all")          return state.projects;
-  if (currentView === "uncategorized") return state.projects.filter(p => !p.labelId);
-  return state.projects.filter(p => p.labelId === currentView);
+  if (currentView === "all")          return activeProjects();
+  if (currentView === "uncategorized") return activeProjects().filter(p => !p.labelId);
+  return activeProjects().filter(p => p.labelId === currentView);
 }
 
 let activeFilterDropdown = null;
@@ -2926,6 +2940,30 @@ function deleteProject(id) {
   if (p) p.actionables.forEach(a => markActionDeleted(a.id));
   markProjectDeleted(id);
   state.projects = state.projects.filter(p => p.id !== id);
+  saveState(); renderAll();
+}
+// Whole-project archiving — tucks the project (and its tasks) into the Archive
+// view. Reversible; permanent deletion lives only in the Archive.
+function archiveProject(id) {
+  const p = findProject(id); if (!p) return;
+  p.archived = true;
+  p.archivedAt = new Date().toISOString();
+  markProjectDirty(id);
+  saveState(); renderAll();
+}
+function unarchiveProject(id) {
+  const p = findProject(id); if (!p) return;
+  p.archived = false;
+  p.archivedAt = null;
+  markProjectDirty(id);
+  saveState(); renderAll();
+}
+function deleteProjectForever(id) {
+  const p = findProject(id); if (!p) return;
+  if (!confirm("Delete this project and its tasks forever? This can't be undone.")) return;
+  p.actionables.forEach(a => markActionDeleted(a.id));
+  markProjectDeleted(id);
+  state.projects = state.projects.filter(x => x.id !== id);
   saveState(); renderAll();
 }
 function updateProjectField(id, field, value) {
@@ -3161,7 +3199,7 @@ function validViews() {
   const set = new Set(["journal", "home", "archive"]);
   if (state.labels.length === 0) set.add("all");
   state.labels.forEach(l => set.add(l.id));
-  if (state.projects.some(p => !p.labelId)) set.add("uncategorized");
+  if (activeProjects().some(p => !p.labelId)) set.add("uncategorized");
   return set;
 }
 function setView(view) {
@@ -3297,7 +3335,7 @@ function renderTabs() {
   // items that match the Home tab's saved status filter (defaults to "today").
   // Home pill mirrors the Home view's today filter: count today=true open items
   let homeOpen = 0;
-  state.projects.forEach(p => p.actionables.forEach(a => {
+  activeProjects().forEach(p => p.actionables.forEach(a => {
     if (a.archived || a.done) return;
     if (!a.today) return;
     homeOpen++;
@@ -3319,17 +3357,17 @@ function renderTabs() {
     '</button>' +
   '</div>';
 
-  if (state.labels.length === 0 && state.projects.length > 0) {
+  if (state.labels.length === 0 && activeProjects().length > 0) {
     html += '<div class="sidebar-tab-wrap">' +
       '<button class="sidebar-tab' + (currentView === "all" ? " active" : "") + '" data-view="all">' +
         '<span class="dot" style="background:var(--text-4);"></span>' +
         '<span class="name">Projects</span>' +
-        '<span class="pill">' + state.projects.length + '</span>' +
+        '<span class="pill">' + activeProjects().length + '</span>' +
       '</button>' +
     '</div>';
   } else {
     state.labels.forEach(l => {
-      const count = state.projects.filter(p => p.labelId === l.id).length;
+      const count = activeProjects().filter(p => p.labelId === l.id).length;
       const isActive = currentView === l.id;
       const popover = activeTabEditor === l.id ? renderTabEditPopover(l) : '';
       html += '<div class="sidebar-tab-wrap">' +
@@ -3342,7 +3380,7 @@ function renderTabs() {
         popover +
       '</div>';
     });
-    const uncategorized = state.projects.filter(p => !p.labelId).length;
+    const uncategorized = activeProjects().filter(p => !p.labelId).length;
     if (uncategorized > 0) {
       html += '<div class="sidebar-tab-wrap">' +
         '<button class="sidebar-tab' + (currentView === "uncategorized" ? " active" : "") + '" data-view="uncategorized">' +
@@ -3361,8 +3399,9 @@ function renderTabs() {
   '</button>';
 
   // Archive — sits at the bottom of the tab list, with a divider above
-  const archivedCount = state.projects.reduce((n, p) =>
-    n + p.actionables.filter(a => a.archived).length, 0);
+  const archivedCount = activeProjects().reduce((n, p) =>
+    n + p.actionables.filter(a => a.archived).length, 0) +
+    state.projects.filter(p => p.archived).length;
   html += '<div class="sidebar-divider" style="margin-top:14px"></div>';
   html += '<div class="sidebar-tab-wrap">' +
     '<button class="sidebar-tab archive-tab' + (currentView === "archive" ? " active" : "") + '" data-view="archive">' +
@@ -4054,7 +4093,7 @@ function triggerWindDown(manual) {
   if (state.windDown.lastTriggeredDate === today) return;
   let cleared = 0;
   const nowIso = new Date().toISOString();
-  state.projects.forEach(p => {
+  activeProjects().forEach(p => {
     p.actionables.forEach(a => {
       if (a.archived) return;
       if (a.done) {
@@ -4436,7 +4475,7 @@ function renderProject(p) {
     '<article class="project" data-project-id="' + p.id + '" ' + colorAttrs + '>' +
       '<div class="drag-handle" data-drag-handle>⋮⋮</div>' +
       '<div class="proj-header">' +
-        '<button class="delete-btn" data-action="delete-project">Delete</button>' +
+        '<button class="archive-btn" data-action="archive-project" title="Archive this project">Archive</button>' +
         '<div class="proj-name" contenteditable="true" data-placeholder="Project name" spellcheck="false">' +
           escapeAttr(p.name) +
         '</div>' +
@@ -4620,7 +4659,7 @@ function wireProjects() {
       const item = el.closest('[data-item-id]');
       const itemId = item && item.dataset.itemId;
 
-      if (action === "delete-project")          deleteProject(projId);
+      if (action === "archive-project")         archiveProject(projId);
       else if (action === "add-actionable")     addActionable(projId);
       else if (action === "remove-actionable")  removeActionable(projId, itemId);
       else if (action === "archive-actionable") archiveActionable(projId, itemId);
@@ -4971,7 +5010,7 @@ document.addEventListener("keydown", (e) => {
 // Scope: Home counts every project; a tab counts only its own projects.
 // All three metrics respect the active per-view filter (status/priority).
 function projectsInStatScope() {
-  if (currentView === "home") return state.projects;
+  if (currentView === "home") return activeProjects();
   return projectsInCurrentView();
 }
 // Total = how many actionables the active filter is currently showing
@@ -5086,7 +5125,7 @@ function renderHome() {
   const cmp = actionableComparator(filters.sort);
   if (cmp) {
     const flat = [];
-    state.projects.forEach(p => {
+    activeProjects().forEach(p => {
       p.actionables.forEach(a => {
         if (a.archived || !ok(a)) return;
         flat.push({ project: p, item: a });
@@ -5108,7 +5147,7 @@ function renderHome() {
   }
 
   const groups = [];
-  state.projects.forEach(p => {
+  activeProjects().forEach(p => {
     // Done tasks stay on Home (shown struck-through) until archived
     let items = p.actionables.filter(a => !a.archived && ok(a));
     if (!items.length) return;
@@ -5400,25 +5439,50 @@ document.getElementById("history-back").addEventListener("click", () => {
 function renderArchive() {
   const container = document.getElementById("archive-container");
   const rows = [];
-  state.projects.forEach(p => {
+  // Loose archived tasks (only from still-active projects — a whole archived
+  // project is represented by its own entry below, not its individual tasks).
+  activeProjects().forEach(p => {
     p.actionables.forEach(a => {
       if (a.archived) rows.push({ p, a });
     });
   });
+  const archivedProjects = state.projects
+    .filter(p => p.archived)
+    .sort((x, y) => (new Date(y.archivedAt || 0)) - (new Date(x.archivedAt || 0)));
   rows.sort((x, y) => {
     const xt = x.a.archivedAt ? new Date(x.a.archivedAt).getTime() : 0;
     const yt = y.a.archivedAt ? new Date(y.a.archivedAt).getTime() : 0;
     return yt - xt;
   });
 
-  if (rows.length === 0) {
+  if (rows.length === 0 && archivedProjects.length === 0) {
     container.innerHTML =
       '<div class="empty-state">' +
         '<h2>Archive is empty</h2>' +
-        '<p>Click the archive icon on any task to tuck it away here. Archived items stay around in case you want them back.</p>' +
+        '<p>Archive a task or a whole project to tuck it away here. Archived items stay around in case you want them back.</p>' +
       '</div>';
     return;
   }
+
+  const projRowHtml = (p) => {
+    const when = p.archivedAt
+      ? new Date(p.archivedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "";
+    const n = p.actionables.length;
+    return '<div class="archive-row" data-archived-project-id="' + p.id + '">' +
+      '<div class="archive-row-main">' +
+        '<div class="archive-row-text">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
+        '<div class="archive-row-meta">' +
+          '<span class="proj-tag">Project · ' + n + (n === 1 ? ' task' : ' tasks') + '</span>' +
+          (when ? '<span class="when">archived ' + when + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="archive-row-actions">' +
+        '<button class="btn ghost" data-action="restore-project">Restore</button>' +
+        '<button class="li-rm" data-action="delete-project-forever" title="Delete forever">×</button>' +
+      '</div>' +
+    '</div>';
+  };
 
   const rowHtml = (r) => {
     const when = r.a.archivedAt
@@ -5446,11 +5510,17 @@ function renderArchive() {
   const yesterdayRows = rows.filter(r => r.a.archivedAt && dateStrOf(r.a.archivedAt) === y);
   const restRows = rows.filter(r => !(r.a.archivedAt && dateStrOf(r.a.archivedAt) === y));
 
+  const total = rows.length + archivedProjects.length;
   let html =
     '<div class="archive-header"><h2>Archive</h2>' +
-      '<div class="archive-sub">' + rows.length + ' archived ' +
-      (rows.length === 1 ? 'item' : 'items') + '</div>' +
+      '<div class="archive-sub">' + total + ' archived ' +
+      (total === 1 ? 'item' : 'items') + '</div>' +
     '</div>';
+
+  if (archivedProjects.length) {
+    html += '<div class="archive-group-label">Archived projects · ' + archivedProjects.length + '</div>' +
+      '<div class="archive-list">' + archivedProjects.map(projRowHtml).join("") + '</div>';
+  }
 
   if (yesterdayRows.length) {
     html += '<div class="archive-group-label">Archived yesterday · ' + yesterdayRows.length + '</div>' +
@@ -5477,6 +5547,18 @@ function wireArchive() {
       const row = btn.closest('.archive-row');
       if (!confirm("Delete this task forever? This can't be undone.")) return;
       removeActionable(row.dataset.projectId, row.dataset.itemId);
+    });
+  });
+  c.querySelectorAll('[data-action="restore-project"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest('.archive-row');
+      unarchiveProject(row.dataset.archivedProjectId);
+    });
+  });
+  c.querySelectorAll('[data-action="delete-project-forever"]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest('.archive-row');
+      deleteProjectForever(row.dataset.archivedProjectId);
     });
   });
 }
@@ -5600,7 +5682,7 @@ function yesterdayDateString() {
 function getExpiredTodayTasks() {
   const today = todayDateString();
   const cand = [];
-  state.projects.forEach(p => {
+  activeProjects().forEach(p => {
     p.actionables.forEach(a => {
       if (a.archived || a.done) return;
       if (!a.todayExpiredAt) return;
@@ -5870,7 +5952,7 @@ function wireJournal() {
         projSel.disabled = true;
         return;
       }
-      const projs = state.projects.filter(p => p.labelId === tabId);
+      const projs = activeProjects().filter(p => p.labelId === tabId);
       projSel.innerHTML = '<option value="">Project *</option>' +
         projs.map(p => '<option value="' + p.id + '">' +
           escapeAttr(p.name || "(untitled)") + '</option>').join("");
@@ -6051,6 +6133,8 @@ function importDataFromFile(file) {
       state.projects.forEach(p => {
         if (p.labelId === undefined) p.labelId = null;
         if (!p.createdAt) p.createdAt = NOW;
+        if (typeof p.archived !== "boolean") p.archived = false;
+        if (p.archivedAt === undefined) p.archivedAt = null;
         (p.actionables || []).forEach(a => {
           if (a.status === undefined) {
             const labs = Array.isArray(a.labels) ? a.labels : [];
@@ -6237,7 +6321,8 @@ async function loadStateFromCloud() {
 
   state.projects = (projectsRes.data || []).map(p => ({
     id: p.id, name: p.name || '', goal: p.goal || '', labelId: p.tab_id || null,
-    actionables: byProject[p.id] || [], createdAt: p.created_at
+    actionables: byProject[p.id] || [], createdAt: p.created_at,
+    archived: !!p.archived, archivedAt: p.archived_at || null
   }));
 
   // Per-view filter selections live only in localStorage (state.filters is
@@ -6327,7 +6412,8 @@ async function flushDirty() {
     const p = state.projects[idx];
     ops.push(sb.from('projects').upsert({
       id: p.id, owner_id: currentUser.id, tab_id: p.labelId || null,
-      name: p.name || '', goal: p.goal || '', position: idx
+      name: p.name || '', goal: p.goal || '', position: idx,
+      archived: !!p.archived, archived_at: p.archivedAt || null
     }));
   });
   dirty.actionables.forEach(id => {
