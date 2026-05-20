@@ -3010,6 +3010,38 @@ function addActionable(projId) {
     if (last) last.focus();
   }, 0);
 }
+// Create a child actionable under `parentId` (replaces drag-to-nest).
+function addSubActionable(projId, parentId) {
+  const p = findProject(projId); if (!p) return;
+  const parent = findActionable(p, parentId); if (!parent) return;
+  if (getDepth(p, parent) >= MAX_DEPTH) return; // respect the nesting cap
+  const now = new Date().toISOString();
+  const a = {
+    id: uid(), text: "", done: false,
+    status: null,
+    blocker: "", waitingFor: "",
+    createdAt: now, updatedAt: now,
+    priority: 0, stuckSince: null, doneAt: null,
+    parentId: parentId, notes: "",
+    archived: false, archivedAt: null,
+    today: false
+  };
+  // Insert just after the parent's existing subtree so it lands inside it.
+  const descIds = new Set(getDescendants(p, parent).map(d => d.id));
+  let insertAt = p.actionables.findIndex(x => x.id === parentId);
+  for (let i = insertAt + 1; i < p.actionables.length; i++) {
+    if (descIds.has(p.actionables[i].id)) insertAt = i; else break;
+  }
+  p.actionables.splice(insertAt + 1, 0, a);
+  // Positions shifted for everything after the insert — re-sync them all.
+  p.actionables.forEach(x => markActionDirty(x.id));
+  saveState(); renderProjects();
+  setTimeout(() => {
+    const li = document.querySelector('[data-project-id="' + projId + '"] li[data-item-id="' + a.id + '"]');
+    const inp = li && li.querySelector('input.item-text');
+    if (inp) inp.focus();
+  }, 0);
+}
 function updateActionable(projId, itemId, field, value) {
   const p = findProject(projId); if (!p) return;
   const it = findActionable(p, itemId); if (!it) return;
@@ -3723,6 +3755,7 @@ function startDeepWork() {
   };
   saveState();
   renderWindDown();
+  renderHeroCompact();
   renderFilterBar();
 }
 function endDeepWork(opts) {
@@ -3743,6 +3776,7 @@ function endDeepWork(opts) {
   saveState();
   if (playChime) playPeacefulChime();
   renderWindDown();
+  renderHeroCompact();
   renderFilterBar();
 }
 
@@ -4316,11 +4350,7 @@ function renderFilterBar() {
     '<span class="dot"></span><span>Today</span></button>';
   leftHtml += buildDropdownHtml("status", "Status", fs.status, statusOpts);
   leftHtml += buildDropdownHtml("age", "Age", fs.age, ageOpts);
-  // Sort is Home-only: on project boards order is controlled by drag, so a
-  // sort dropdown there would fight the manual ordering.
-  if (currentView === "home") {
-    leftHtml += buildDropdownHtml("sort", "Sort", fs.sort, sortOpts);
-  }
+  leftHtml += buildDropdownHtml("sort", "Sort", fs.sort, sortOpts);
   if (isStatusFilterActive() || isTodayFilterActive() || isAgeFilterActive()) {
     leftHtml += '<button class="filter-clear" id="filter-clear-btn" title="Clear filters">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
@@ -4480,8 +4510,7 @@ function renderProject(p) {
   // get orphaned by the tree walker).
   visible = withAncestors(p, visible);
 
-  // Boards always render in manual (drag) order — sort lives only on Home.
-  const flat = buildActionableTree(p, visible);
+  const flat = buildActionableTree(p, visible, actionableComparator(getCurrentFilters().sort));
 
   const doneFooter = archived.length > 0
     ? '<div class="done-footer ' + (showArchived ? "expanded" : "") + '" data-action="toggle-done-footer">' +
@@ -4492,7 +4521,6 @@ function renderProject(p) {
 
   return (
     '<article class="project" data-project-id="' + p.id + '" ' + colorAttrs + '>' +
-      '<div class="drag-handle" data-drag-handle>⋮⋮</div>' +
       '<div class="proj-header">' +
         '<button class="archive-btn" data-action="archive-project" title="Archive this project">Archive</button>' +
         '<div class="proj-name" contenteditable="true" data-placeholder="Project name" spellcheck="false">' +
@@ -4601,6 +4629,17 @@ function renderActionable(p, a, depth) {
       '</svg>' +
     '</button>';
 
+  // Subtask button — adds a child actionable. Hidden once we hit the depth cap.
+  const subtaskBtn = (depth < MAX_DEPTH)
+    ? '<button class="row-tool" data-action="add-subtask" title="Add subtask">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M9 5v8a3 3 0 0 0 3 3h7"/>' +
+          '<line x1="15" y1="12" x2="19" y2="16"/>' +
+          '<line x1="15" y1="20" x2="19" y2="16"/>' +
+        '</svg>' +
+      '</button>'
+    : "";
+
   // Notes toggle — chevron caret. Highlights when notes exist or panel is open.
   const notesOpen = expandedNotes.has(a.id);
   const hasNotes = !!(a.notes && a.notes.trim().length);
@@ -4627,7 +4666,6 @@ function renderActionable(p, a, depth) {
   return (
     '<li data-item-id="' + a.id + '" data-depth="' + depth + '" class="' + (a.done ? "done" : "") + todayCls + '">' +
       '<div class="item-row">' +
-        '<span class="item-drag-handle" data-item-drag-handle>⋮⋮</span>' +
         '<input type="checkbox" data-action="toggle-actionable"' + (a.done ? " checked" : "") + '>' +
         '<input type="text" class="item-text" data-action="update-actionable" ' +
           'placeholder="What needs to be done?" value="' + escapeAttr(a.text) + '">' +
@@ -4637,6 +4675,7 @@ function renderActionable(p, a, depth) {
           renderStatusChip(p, a) +
           renderStatusPicker(p, a) +
         '</div>' +
+        subtaskBtn +
         gcalBtn +
         notesBtn +
         archiveBtn +
@@ -4680,6 +4719,7 @@ function wireProjects() {
 
       if (action === "archive-project")         archiveProject(projId);
       else if (action === "add-actionable")     addActionable(projId);
+      else if (action === "add-subtask")        addSubActionable(projId, itemId);
       else if (action === "remove-actionable")  removeActionable(projId, itemId);
       else if (action === "archive-actionable") archiveActionable(projId, itemId);
       else if (action === "unarchive-actionable") unarchiveActionable(projId, itemId);
@@ -4844,111 +4884,15 @@ function endProjectSplitDrag() {
 }
 
 function attachDragHandlers() {
+  // Project- and task-reordering drag was removed in favor of the Sort dropdown
+  // and the + Subtask button. The only draggable thing left on a board is the
+  // column-split divider that resizes the project-name column.
   document.querySelectorAll('.project').forEach(article => {
-    // Column-split divider: drag to resize the project-name column globally
     const divider = article.querySelector('[data-proj-divider]');
     if (divider && !divider.dataset.wired) {
       divider.dataset.wired = "1";
       divider.addEventListener("mousedown", (e) => startProjectSplitDrag(e, divider, article));
     }
-
-    const handle = article.querySelector('[data-drag-handle]');
-    if (!handle) return;
-    handle.addEventListener("mousedown", () => { article.draggable = true; });
-    handle.addEventListener("mouseup", () => { article.draggable = false; });
-    article.addEventListener("dragstart", (e) => {
-      if (!article.draggable) return;
-      e.stopPropagation();
-      article.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("application/x-project", article.dataset.projectId);
-    });
-    article.addEventListener("dragend", () => {
-      article.classList.remove("dragging");
-      article.draggable = false;
-      document.querySelectorAll('.project.drag-over').forEach(el => el.classList.remove("drag-over"));
-    });
-    article.addEventListener("dragover", (e) => {
-      if (!Array.from(e.dataTransfer.types).includes("application/x-project")) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      if (!article.classList.contains("dragging")) article.classList.add("drag-over");
-    });
-    article.addEventListener("dragleave", () => article.classList.remove("drag-over"));
-    article.addEventListener("drop", (e) => {
-      const draggedId = e.dataTransfer.getData("application/x-project");
-      if (!draggedId) return;
-      e.preventDefault();
-      article.classList.remove("drag-over");
-      const targetId = article.dataset.projectId;
-      if (draggedId === targetId) return;
-      reorderProjects(draggedId, targetId);
-    });
-
-    // ── Actionable rows: drag to reorder OR nest as sub-item ──
-    // Three drop zones per row (by mouse Y within the row):
-    //   top 30%    → place ABOVE as sibling
-    //   middle 40% → NEST as child (depth permitting)
-    //   bottom 30% → place BELOW as sibling
-    function clearActionableDropMarkers() {
-      article.querySelectorAll('.actionables-list > li').forEach(el =>
-        el.classList.remove("drag-over-above", "drag-over-below", "drag-over-nest"));
-    }
-    function dropModeFor(li, e) {
-      const rect = li.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-      const h = rect.height;
-      if (y < h * 0.30) return "above";
-      if (y > h * 0.70) return "below";
-      return "nest";
-    }
-
-    article.querySelectorAll('.actionables-list > li').forEach(li => {
-      const ah = li.querySelector('[data-item-drag-handle]');
-      if (!ah) return;
-      ah.addEventListener("mousedown", () => { li.draggable = true; });
-      ah.addEventListener("mouseup", () => { li.draggable = false; });
-      li.addEventListener("dragstart", (e) => {
-        if (!li.draggable) return;
-        e.stopPropagation();
-        li.classList.add("dragging");
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("application/x-actionable", li.dataset.itemId);
-        e.dataTransfer.setData("application/x-actionable-proj", article.dataset.projectId);
-      });
-      li.addEventListener("dragend", () => {
-        li.classList.remove("dragging");
-        li.draggable = false;
-        clearActionableDropMarkers();
-      });
-      li.addEventListener("dragover", (e) => {
-        if (!Array.from(e.dataTransfer.types).includes("application/x-actionable")) return;
-        if (li.classList.contains("dragging")) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-        const mode = dropModeFor(li, e);
-        // Reset siblings, then mark this one with the right zone class
-        clearActionableDropMarkers();
-        li.classList.add("drag-over-" + mode);
-      });
-      li.addEventListener("dragleave", (e) => {
-        // Only clear if leaving the row itself (not a child element)
-        if (!li.contains(e.relatedTarget)) {
-          li.classList.remove("drag-over-above", "drag-over-below", "drag-over-nest");
-        }
-      });
-      li.addEventListener("drop", (e) => {
-        const draggedId = e.dataTransfer.getData("application/x-actionable");
-        const draggedProj = e.dataTransfer.getData("application/x-actionable-proj");
-        if (!draggedId) return;
-        e.preventDefault();
-        const mode = dropModeFor(li, e);
-        clearActionableDropMarkers();
-        if (draggedProj !== article.dataset.projectId) return;
-        if (draggedId === li.dataset.itemId) return;
-        dropActionable(article.dataset.projectId, draggedId, li.dataset.itemId, mode);
-      });
-    });
   });
 }
 
