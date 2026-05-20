@@ -2009,6 +2009,24 @@ ul.items li:hover .row-tool { opacity: 1; }
 }
 .today-item .proj-tag:hover { background: #2a2a30; color: var(--text); }
 
+/* The "one thing" focus star + chosen-task treatment */
+.focus-star {
+  background: none; border: none; cursor: pointer; flex-shrink: 0;
+  color: var(--text-4); font-size: 16px; line-height: 1; padding: 0 2px;
+  transition: color 0.15s, transform 0.1s;
+}
+.focus-star:hover { color: #f5b301; transform: scale(1.15); }
+.focus-star.on { color: #f5b301; }
+.today-item.focus {
+  border-color: #f5b301;
+  background: rgba(245, 179, 1, 0.08);
+}
+.today-item .focus-note {
+  flex-basis: 100%; margin-left: 28px;
+  font-size: 12px; font-weight: 600; color: #c98a00;
+  letter-spacing: 0.01em;
+}
+
 /* Archive view */
 .archive-header { margin-bottom: 22px; }
 .archive-header h2 {
@@ -2675,6 +2693,7 @@ state.projects.forEach(p => {
     if (typeof a.notes !== "string") a.notes = "";
     if (typeof a.archived !== "boolean") a.archived = false;
     if (a.archivedAt === undefined) a.archivedAt = null;
+    if (typeof a.focus !== "boolean") a.focus = false;
     // Migrate legacy status "today" → "in_progress" + today=true flag
     if (a.status === "today") {
       a.status = "in_progress";
@@ -3026,7 +3045,7 @@ function addActionable(projId, text, opts) {
     priority: 0, stuckSince: null, doneAt: null,
     parentId: null, notes: "",
     archived: false, archivedAt: null,
-    today: false
+    today: false, focus: false
   };
   p.actionables.push(a);
   markActionDirty(a.id);
@@ -3058,7 +3077,7 @@ function addSubActionable(projId, parentId) {
     priority: 0, stuckSince: null, doneAt: null,
     parentId: parentId, notes: "",
     archived: false, archivedAt: null,
-    today: false
+    today: false, focus: false
   };
   // Insert just after the parent's existing subtree so it lands inside it.
   const descIds = new Set(getDescendants(p, parent).map(d => d.id));
@@ -3084,6 +3103,7 @@ function updateActionable(projId, itemId, field, value) {
     if (value && !it.done) it.doneAt = now;
     if (!value) it.doneAt = null;
     it.done = value;
+    if (value && it.focus) it.focus = false; // completing your one thing releases it
     touchActionable(it);
     markActionDirty(itemId);
     // Cascade to descendants: checking parent checks all subs (and unchecking
@@ -3109,6 +3129,39 @@ function toggleTodayFlag(projId, itemId) {
   a.today = !a.today;
   touchActionable(a);
   markActionDirty(itemId);
+  saveState();
+  renderAll();
+}
+// ─── The "one thing" focus ──────────────────────────────
+// Exactly one task across all projects can be the focus. While one is set, the
+// star button hides on every other task — you commit to it until it's done.
+let currentFocusId = null; // recomputed each Home render
+function focusTaskId() {
+  let id = null;
+  state.projects.forEach(p => {
+    if (p.archived) return;
+    p.actionables.forEach(a => {
+      if (a.focus && !a.archived && !a.done) id = a.id;
+    });
+  });
+  return id;
+}
+function clearAllFocus() {
+  state.projects.forEach(p => p.actionables.forEach(a => {
+    if (a.focus) { a.focus = false; markActionDirty(a.id); }
+  }));
+}
+function setFocusTask(projId, itemId) {
+  const p = findProject(projId); if (!p) return;
+  const a = findActionable(p, itemId); if (!a) return;
+  clearAllFocus();      // only one focus at a time
+  a.focus = true;
+  markActionDirty(a.id);
+  saveState();
+  renderAll();
+}
+function clearFocusTask() {
+  clearAllFocus();
   saveState();
   renderAll();
 }
@@ -5067,51 +5120,11 @@ function renderStatsStrip() {
   '</div>';
 }
 
-// ─── Keystone (One Thing Today) ───────────────────────
 function todayDateString() {
   const d = new Date();
   return d.getFullYear() + "-" +
     String(d.getMonth() + 1).padStart(2, "0") + "-" +
     String(d.getDate()).padStart(2, "0");
-}
-function getKeystone() {
-  const today = todayDateString();
-  // If keystone is from a previous day, surface a blank one for today (but
-  // we don't wipe yesterday's text until the user replaces it — they may
-  // want to glance back at what their One Thing was).
-  if (!state.keystone || state.keystone.date !== today) {
-    return { date: today, text: "", done: false, isToday: false,
-             previousText: state.keystone && state.keystone.text || "",
-             previousDate: state.keystone && state.keystone.date || null };
-  }
-  return Object.assign({}, state.keystone, { isToday: true });
-}
-function updateKeystone(field, value) {
-  const today = todayDateString();
-  if (!state.keystone || state.keystone.date !== today) {
-    state.keystone = { date: today, text: "", done: false };
-  }
-  state.keystone[field] = value;
-  if (field === "done") {
-    state.keystone.doneAt = value ? new Date().toISOString() : null;
-  }
-  markPrefsDirty();
-  saveState();
-}
-function renderKeystone() {
-  const k = getKeystone();
-  const today = new Date();
-  const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-  return '<div class="keystone-card">' +
-    '<div class="keystone-label">The One Thing</div>' +
-    '<div class="keystone-sub">If I do nothing else today — ' + dateLabel + '</div>' +
-    '<div class="keystone-row">' +
-      '<input type="checkbox" data-action="keystone-done"' + (k.done ? ' checked' : '') + '>' +
-      '<input type="text" class="keystone-input' + (k.done ? ' done' : '') + '" ' +
-        'data-action="keystone-text" placeholder="One thing that would make today count…" ' +
-        'value="' + escapeAttr(k.text) + '">' +
-    '</div>' +
-  '</div>';
 }
 
 // ─── Render: Home view ─────────────────────────────────
@@ -5120,7 +5133,7 @@ function renderKeystone() {
 function renderHome() {
   const container = document.getElementById("home-list-container");
 
-  const keystoneHtml = renderKeystone();
+  currentFocusId = focusTaskId();
   const ok = (a) => passesAllItemFilters(a);
   const filters = getCurrentFilters();
   const filterActive = filters.status !== null || filters.today === true || filters.age !== null;
@@ -5151,17 +5164,15 @@ function renderHome() {
       });
     });
     if (flat.length === 0) {
-      container.innerHTML = keystoneHtml + '<div class="empty-state">' + emptyMsg() + '</div>';
-      wireKeystone();
+      container.innerHTML = '<div class="empty-state">' + emptyMsg() + '</div>';
       return;
     }
     flat.sort((x, y) => cmp(x.item, y.item));
-    container.innerHTML = keystoneHtml +
+    container.innerHTML =
       '<div class="today-group"><div class="today-list">' +
         flat.map(e => renderHomeItem(e.project, e.item, 0)).join("") +
       '</div></div>';
     wireHomeView();
-    wireKeystone();
     return;
   }
 
@@ -5178,12 +5189,11 @@ function renderHome() {
   });
 
   if (groups.length === 0) {
-    container.innerHTML = keystoneHtml + '<div class="empty-state">' + emptyMsg() + '</div>';
-    wireKeystone();
+    container.innerHTML = '<div class="empty-state">' + emptyMsg() + '</div>';
     return;
   }
 
-  container.innerHTML = keystoneHtml + groups.map(g => {
+  container.innerHTML = groups.map(g => {
     const items = g.tree.map(n => n.item);
     const openCount = items.filter(i => !i.done).length;
     const l = findLabel(g.project.labelId);
@@ -5207,25 +5217,6 @@ function renderHome() {
   }).join("");
 
   wireHomeView();
-  wireKeystone();
-}
-
-function wireKeystone() {
-  const container = document.getElementById("home-list-container");
-  const txt = container.querySelector('input[data-action="keystone-text"]');
-  const cb  = container.querySelector('input[data-action="keystone-done"]');
-  if (txt) {
-    txt.addEventListener("input", () => updateKeystone("text", txt.value));
-    txt.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") { e.preventDefault(); txt.blur(); }
-    });
-  }
-  if (cb) {
-    cb.addEventListener("change", () => {
-      updateKeystone("done", cb.checked);
-      renderHome();
-    });
-  }
 }
 
 function renderHomeItem(p, a, depth) {
@@ -5245,14 +5236,33 @@ function renderHomeItem(p, a, depth) {
   const todayBtn = '<button class="today-toggle' + (a.today ? " on" : "") + '" ' +
     'data-action="home-toggle-today" title="Toggle today">' +
     (a.today ? "Today" : "Not today") + '</button>';
+
+  // The "one thing" star. Pick one task to commit to; once chosen, the star
+  // hides on every other task and the chosen one keeps a filled star to release.
+  const isFocus = a.id === currentFocusId;
+  const focusActive = !!currentFocusId;
+  let starBtn = "";
+  if (isFocus) {
+    starBtn = '<button class="focus-star on" data-action="clear-focus" ' +
+      'title="Release this — frees you to lock onto something else">★</button>';
+  } else if (!focusActive && !a.done) {
+    starBtn = '<button class="focus-star" data-action="set-focus" ' +
+      'title="Lock in as your one thing — don\'t touch anything else until it\'s done">☆</button>';
+  }
+  const focusNote = isFocus
+    ? '<div class="focus-note">Heads down — don\'t touch anything else until this is done.</div>'
+    : "";
+
   return (
-    '<div class="today-item' + (a.done ? " done" : "") + '" data-depth="' + depth + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
+    '<div class="today-item' + (a.done ? " done" : "") + (isFocus ? " focus" : "") + '" data-depth="' + depth + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
       '<input type="checkbox" data-action="home-toggle"' + (a.done ? " checked" : "") + '>' +
+      starBtn +
       '<div class="text">' + escapeAttr(a.text || "(untitled)") + '</div>' +
       todayBtn +
       '<div class="status-wrap">' + statusChipHtml + statusPickerHtml + '</div>' +
       '<div class="proj-tag" data-action="jump-to-project">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
       contextRow +
+      focusNote +
     '</div>'
   );
 }
@@ -5273,6 +5283,21 @@ function wireHomeView() {
       const wrap = btn.closest('.today-item');
       if (!wrap) return;
       toggleTodayFlag(wrap.dataset.projectId, wrap.dataset.itemId);
+    });
+  });
+  // Focus star → set / release the one focus task
+  container.querySelectorAll('[data-action="set-focus"]').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wrap = btn.closest('.today-item');
+      if (!wrap) return;
+      setFocusTask(wrap.dataset.projectId, wrap.dataset.itemId);
+    });
+  });
+  container.querySelectorAll('[data-action="clear-focus"]').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      clearFocusTask();
     });
   });
   // Status chip → toggle picker
@@ -6169,6 +6194,7 @@ function importDataFromFile(file) {
           if (typeof a.priority !== "number") a.priority = 0;
           if (a.stuckSince === undefined) a.stuckSince = a.status === "stuck" ? NOW : null;
           if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
+          if (typeof a.focus !== "boolean") a.focus = false;
           delete a.labels;
           delete a.dueDate;
         });
@@ -6333,6 +6359,7 @@ async function loadStateFromCloud() {
       archived: !!a.archived,
       archivedAt: a.archived_at || null,
       today: todayFlag,
+      focus: !!a.focus,
       createdAt: a.created_at, updatedAt: a.updated_at, doneAt: a.done_at, stuckSince: a.stuck_since,
       labels: []
     });
@@ -6449,6 +6476,7 @@ async function flushDirty() {
       archived: !!a.archived,
       archived_at: a.archivedAt || null,
       today: !!a.today,
+      focus: !!a.focus,
       position: loc.position,
       updated_at: a.updatedAt || new Date().toISOString(),
       done_at: a.doneAt || null, stuck_since: a.stuckSince || null
@@ -6558,8 +6586,29 @@ async function maybeMigrateLocalStorage() {
 }
 
 // ─── Init flow ─────────────────────────────────────────
+// Make sure the signed-in user has a normalized profiles row, so they're
+// findable by email for board sharing — regardless of how they signed up
+// (the signup trigger doesn't reliably populate this for Google sign-in).
+async function ensureProfile() {
+  if (!sb || !currentUser) return;
+  const email = (currentUser.email || "").trim().toLowerCase();
+  if (!email) return;
+  const meta = currentUser.user_metadata || {};
+  const displayName = meta.full_name || meta.name || meta.display_name || "";
+  try {
+    const res = await sb.from('profiles').upsert(
+      { id: currentUser.id, email: email, display_name: displayName },
+      { onConflict: 'id' }
+    );
+    if (res.error) console.error('ensureProfile', res.error);
+  } catch (e) {
+    console.error('ensureProfile', e);
+  }
+}
+
 async function initAfterAuth() {
   syncEnabled = false;
+  await ensureProfile();
   await maybeMigrateLocalStorage();
   await loadStateFromCloud();
   document.getElementById('signed-in').style.display = '';
