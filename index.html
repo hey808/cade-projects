@@ -4733,7 +4733,8 @@ function wireProjects() {
 document.addEventListener("click", (e) => {
   if (activeStatusPicker && !e.target.closest('.status-picker') && !e.target.closest('[data-action="open-status-picker"]')) {
     activeStatusPicker = null;
-    renderProjects();
+    if (currentView === "home") renderHome();
+    else renderProjects();
   }
   if (activeTabEditor && !e.target.closest('.tab-edit-popover') && !e.target.closest('[data-tab-edit]') && !e.target.closest('#tab-add')) {
     activeTabEditor = null;
