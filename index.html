@@ -1426,13 +1426,15 @@ body.journal-mode .filter-bar { display: none !important; }
   border-color: var(--text-3);
   color: var(--text);
 }
-.btn.add-line {
-  background: transparent; border: 1px dashed var(--border-strong); color: var(--text-3);
-  height: auto; padding: 8px 11px; font-size: 12px; width: 100%;
-  justify-content: flex-start; text-align: left;
-  border-radius: 6px; margin-top: 8px;
+.add-actionable-input {
+  width: 100%; margin-top: 8px; box-sizing: border-box;
+  background: transparent; border: 1px dashed var(--border-strong);
+  color: var(--text); font-family: inherit; font-size: 12px;
+  padding: 8px 11px; border-radius: 6px;
 }
-.btn.add-line:hover { border-color: var(--accent); color: var(--accent); }
+.add-actionable-input::placeholder { color: var(--text-3); }
+.add-actionable-input:hover { border-color: var(--accent); }
+.add-actionable-input:focus { outline: none; border-style: solid; border-color: var(--accent); }
 
 /* Labels management panel */
 .labels-panel {
@@ -1523,18 +1525,18 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 .project:hover .delete-btn { opacity: 1; }
 .project .delete-btn:hover { color: var(--bad); background: rgba(239, 68, 68, 0.1); }
-.project .archive-btn {
-  position: absolute; top: -4px; right: 0;
-  background: none; border: none; color: var(--text-4);
-  cursor: pointer; padding: 4px 9px; font-size: 12px;
-  border-radius: 5px; font-family: inherit;
-  opacity: 0; transition: opacity 0.15s;
+.proj-meta .archive-btn {
+  background: none; border: 1px solid var(--border); color: var(--text-4);
+  cursor: pointer; padding: 1px 8px; font-size: 10px; font-weight: 600;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  border-radius: 4px; font-family: inherit;
+  opacity: 0; transition: opacity 0.15s, color 0.15s, border-color 0.15s;
 }
-.project:hover .archive-btn { opacity: 1; }
-.project .archive-btn:hover { color: var(--accent); background: var(--card-hover); }
+.project:hover .proj-meta .archive-btn { opacity: 1; }
+.proj-meta .archive-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Left column: project name + meta (delete sits inside this column now) */
-.proj-header { min-width: 0; padding-right: 50px; position: relative; }
+.proj-header { min-width: 0; }
 .proj-name {
   width: 100%; min-width: 0; background: transparent; border: none;
   font-family: var(--font-serif);
@@ -1604,7 +1606,6 @@ body.proj-resizing * { cursor: col-resize !important; }
 /* Narrow screens: stack header above actionables, hide the divider */
 @media (max-width: 720px) {
   .project { grid-template-columns: 1fr; gap: 14px; padding-right: 18px; }
-  .proj-header { padding-right: 60px; }
   .proj-divider { display: none; }
 }
 
@@ -2988,11 +2989,11 @@ function setProjectLabel(projId, labelId) {
 }
 
 // ─── Actionables ───────────────────────────────────────
-function addActionable(projId) {
+function addActionable(projId, text, opts) {
   const p = findProject(projId); if (!p) return;
   const now = new Date().toISOString();
   const a = {
-    id: uid(), text: "", done: false,
+    id: uid(), text: text || "", done: false,
     status: null,
     blocker: "", waitingFor: "",
     createdAt: now, updatedAt: now,
@@ -3005,6 +3006,13 @@ function addActionable(projId) {
   markActionDirty(a.id);
   saveState(); renderProjects();
   setTimeout(() => {
+    // After an inline add, keep focus on the add box for rapid entry;
+    // otherwise focus the newly created (empty) row.
+    if (opts && opts.keepAddFocus) {
+      const box = document.querySelector('[data-project-id="' + projId + '"] .add-actionable-input');
+      if (box) box.focus();
+      return;
+    }
     const items = document.querySelectorAll('[data-project-id="' + projId + '"] .actionables-list input.item-text');
     const last = items[items.length - 1];
     if (last) last.focus();
@@ -4522,11 +4530,13 @@ function renderProject(p) {
   return (
     '<article class="project" data-project-id="' + p.id + '" ' + colorAttrs + '>' +
       '<div class="proj-header">' +
-        '<button class="archive-btn" data-action="archive-project" title="Archive this project">Archive</button>' +
         '<div class="proj-name" contenteditable="true" data-placeholder="Project name" spellcheck="false">' +
           escapeAttr(p.name) +
         '</div>' +
-        '<div class="proj-meta"><span class="count">' + active.length + ' open</span></div>' +
+        '<div class="proj-meta">' +
+          '<span class="count">' + active.length + ' open</span>' +
+          '<button class="archive-btn" data-action="archive-project" title="Archive this project">Archive</button>' +
+        '</div>' +
       '</div>' +
       '<div class="proj-divider" data-proj-divider title="Drag to resize"></div>' +
       '<div class="proj-body">' +
@@ -4536,7 +4546,8 @@ function renderProject(p) {
             : flat.map(node => renderActionable(p, node.item, node.depth)).join("")
           ) +
         '</ul>' +
-        '<button class="btn add-line" data-action="add-actionable">+ Add actionable</button>' +
+        '<input type="text" class="add-actionable-input" data-action="add-actionable-input" ' +
+          'placeholder="+ Add actionable" spellcheck="false">' +
         doneFooter +
       '</div>' +
     '</article>'
@@ -4797,6 +4808,18 @@ function wireProjects() {
         const proj = inp.closest('[data-project-id]');
         if (proj) addActionable(proj.dataset.projectId);
       }
+    });
+  });
+
+  // Inline "add actionable" box — type and press Enter to create one
+  container.querySelectorAll('.add-actionable-input').forEach(inp => {
+    inp.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      const proj = inp.closest('[data-project-id]');
+      const text = inp.value.trim();
+      if (!proj || !text) return;
+      addActionable(proj.dataset.projectId, text, { keepAddFocus: true });
     });
   });
 
