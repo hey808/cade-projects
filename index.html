@@ -803,6 +803,35 @@ input.search:focus + kbd { display: none; }
 .journal-cal iframe {
   width: 100%; height: 340px; border: 0; display: block;
 }
+/* Expired-today review (final journal step) */
+.expired-list {
+  width: 100%; max-width: 640px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.expired-item {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+}
+.expired-item.added { opacity: 0.6; }
+.expired-item .ei-text {
+  font-size: 14px; color: var(--text); font-weight: 500; flex: 1;
+  text-align: left;
+}
+.expired-item .ei-proj {
+  font-size: 11px; color: var(--text-4); white-space: nowrap;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.expired-item .ei-add {
+  background: var(--accent); border: none; color: #fff;
+  font-family: inherit; font-size: 12px; font-weight: 600;
+  padding: 7px 12px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+}
+.expired-item .ei-add:hover { filter: brightness(1.08); }
+.expired-item .ei-add.done {
+  background: transparent; color: var(--good);
+  border: 1px solid var(--good); cursor: default;
+}
 .journal-card textarea {
   width: 100%; max-width: 640px;
   background: var(--card); border: 1px solid var(--border);
@@ -1972,6 +2001,12 @@ ul.items li:hover .row-tool { opacity: 1; }
 .archive-header .archive-sub {
   color: var(--text-3); font-size: 13px; margin-top: 4px;
 }
+.archive-group-label {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-3);
+  margin: 22px 0 10px;
+}
+.archive-group-label:first-of-type { margin-top: 0; }
 .archive-list { display: flex; flex-direction: column; gap: 8px; }
 .archive-row {
   display: flex; align-items: center; gap: 14px;
@@ -4033,6 +4068,8 @@ function triggerWindDown(manual) {
       }
       if (!a.today) return;          // only items currently on today's list
       a.today = false;              // clear the Today flag for a fresh tomorrow
+      a.todayExpiredAt = nowIso;    // remember it expired here, so the next
+                                    // morning's journal can offer to re-add it
       touchActionable(a);
       markActionDirty(a.id);
       cleared++;
@@ -4179,6 +4216,17 @@ function buildDropdownHtml(type, labelText, currentValue, options) {
 
 function renderFilterBar() {
   const bar = document.getElementById("filter-bar");
+
+  // Archive is a read-only history view — no filters, sort, or New project.
+  if (currentView === "archive") {
+    bar.innerHTML = "";
+    bar.style.display = "none";
+    const hs = document.getElementById("header-stats");
+    if (hs) hs.innerHTML = "";
+    return;
+  }
+  bar.style.display = "";
+
   const fs = getCurrentFilters();
 
   const statusOpts = [
@@ -5369,33 +5417,48 @@ function renderArchive() {
     return;
   }
 
-  container.innerHTML =
+  const rowHtml = (r) => {
+    const when = r.a.archivedAt
+      ? new Date(r.a.archivedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : "";
+    return '<div class="archive-row" data-project-id="' + r.p.id + '" data-item-id="' + r.a.id + '">' +
+      '<div class="archive-row-main">' +
+        '<div class="archive-row-text' + (r.a.done ? " done" : "") + '">' +
+          escapeAttr(r.a.text || "(untitled)") +
+        '</div>' +
+        '<div class="archive-row-meta">' +
+          '<span class="proj-tag">' + escapeAttr(r.p.name || "(untitled project)") + '</span>' +
+          (when ? '<span class="when">archived ' + when + '</span>' : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="archive-row-actions">' +
+        '<button class="btn ghost" data-action="restore-archived">Restore</button>' +
+        '<button class="li-rm" data-action="delete-archived" title="Delete forever">×</button>' +
+      '</div>' +
+    '</div>';
+  };
+
+  // Surface what was archived yesterday in its own section up top.
+  const y = yesterdayDateString();
+  const yesterdayRows = rows.filter(r => r.a.archivedAt && dateStrOf(r.a.archivedAt) === y);
+  const restRows = rows.filter(r => !(r.a.archivedAt && dateStrOf(r.a.archivedAt) === y));
+
+  let html =
     '<div class="archive-header"><h2>Archive</h2>' +
       '<div class="archive-sub">' + rows.length + ' archived ' +
       (rows.length === 1 ? 'item' : 'items') + '</div>' +
-    '</div>' +
-    '<div class="archive-list">' +
-      rows.map(r => {
-        const when = r.a.archivedAt
-          ? new Date(r.a.archivedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-          : "";
-        return '<div class="archive-row" data-project-id="' + r.p.id + '" data-item-id="' + r.a.id + '">' +
-          '<div class="archive-row-main">' +
-            '<div class="archive-row-text' + (r.a.done ? " done" : "") + '">' +
-              escapeAttr(r.a.text || "(untitled)") +
-            '</div>' +
-            '<div class="archive-row-meta">' +
-              '<span class="proj-tag">' + escapeAttr(r.p.name || "(untitled project)") + '</span>' +
-              (when ? '<span class="when">archived ' + when + '</span>' : '') +
-            '</div>' +
-          '</div>' +
-          '<div class="archive-row-actions">' +
-            '<button class="btn ghost" data-action="restore-archived">Restore</button>' +
-            '<button class="li-rm" data-action="delete-archived" title="Delete forever">×</button>' +
-          '</div>' +
-        '</div>';
-      }).join("") +
     '</div>';
+
+  if (yesterdayRows.length) {
+    html += '<div class="archive-group-label">Archived yesterday · ' + yesterdayRows.length + '</div>' +
+      '<div class="archive-list">' + yesterdayRows.map(rowHtml).join("") + '</div>';
+  }
+  if (restRows.length) {
+    html += (yesterdayRows.length ? '<div class="archive-group-label">Earlier</div>' : '') +
+      '<div class="archive-list">' + restRows.map(rowHtml).join("") + '</div>';
+  }
+
+  container.innerHTML = html;
   wireArchive();
 }
 function wireArchive() {
@@ -5514,6 +5577,34 @@ function updateJournal(date, key, value) {
   // Keep the stepper progress markers in sync without disturbing the textarea
   refreshJournalStepper();
 }
+// ─── Date helpers for "expired yesterday" lookups ──────
+function dateStrOf(d) {
+  d = new Date(d);
+  return d.getFullYear() + "-" +
+    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+    String(d.getDate()).padStart(2, "0");
+}
+function yesterdayDateString() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return dateStrOf(d);
+}
+// Tasks whose Today flag was cleared at yesterday's wind-down and haven't been
+// completed/archived since — surfaced in the morning journal so the user can
+// re-add them. Re-added items stay in the list (marked "Added") so the list
+// doesn't shift under the user mid-review.
+function getExpiredTodayTasks() {
+  const y = yesterdayDateString();
+  const out = [];
+  state.projects.forEach(p => {
+    p.actionables.forEach(a => {
+      if (a.archived || a.done) return;
+      if (!a.todayExpiredAt) return;
+      if (dateStrOf(a.todayExpiredAt) === y) out.push({ project: p, item: a });
+    });
+  });
+  return out;
+}
 function renderJournal() {
   const container = document.getElementById("journal-container");
   const date = todayDateString();
@@ -5623,9 +5714,13 @@ function renderJournal() {
   }
 
   const calStep = JOURNAL_QUESTIONS.length; // index of the calendar step (4)
-  if (journalStep < 0 || journalStep > calStep) journalStep = 0;
+  const expired = getExpiredTodayTasks();
+  const hasExpired = expired.length > 0;
+  const expiredStep = calStep + 1;          // optional final step (5)
+  const lastStep = hasExpired ? expiredStep : calStep;
+  if (journalStep < 0 || journalStep > lastStep) journalStep = 0;
 
-  // Stepper dots: one per question + a final calendar dot
+  // Stepper dots: one per question + calendar (+ expired-today, if any)
   let steps = JOURNAL_QUESTIONS.map((qq, i) => {
     const filled = (entry[qq.key] || "").trim().length > 0;
     const active = i === journalStep;
@@ -5635,11 +5730,16 @@ function renderJournal() {
   }).join("");
   steps += '<button class="step' + (journalStep === calStep ? " active" : "") + '" ' +
     'data-step="' + calStep + '" title="Calendar"></button>';
+  if (hasExpired) {
+    steps += '<button class="step' + (journalStep === expiredStep ? " active" : "") + '" ' +
+      'data-step="' + expiredStep + '" title="Yesterday\'s today list"></button>';
+  }
 
   const prevDisabled = journalStep === 0 ? " disabled" : "";
 
-  // ── Final step: calendar view ──
+  // ── Calendar step ──
   if (journalStep === calStep) {
+    const calNextLabel = hasExpired ? "Next →" : "Submit";
     container.innerHTML =
       '<div class="journal-card">' +
         '<div class="question">Anything to add?</div>' +
@@ -5647,6 +5747,34 @@ function renderJournal() {
         '<div class="journal-cal">' +
           '<iframe src="' + CALENDAR_EMBED_URL + '" frameborder="0" scrolling="no" loading="lazy"></iframe>' +
         '</div>' +
+        '<div class="journal-nav">' +
+          '<button class="nav-btn" id="journal-prev">← Previous</button>' +
+          '<div class="journal-stepper">' + steps + '</div>' +
+          '<button class="nav-btn primary" id="journal-next">' + calNextLabel + '</button>' +
+        '</div>' +
+      '</div>';
+    wireJournal();
+    return;
+  }
+
+  // ── Optional final step: yesterday's expired today-list ──
+  if (journalStep === expiredStep) {
+    const rows = expired.map(e => {
+      const added = !!e.item.today;
+      return '<div class="expired-item' + (added ? " added" : "") + '">' +
+        '<div class="ei-text">' + escapeAttr(e.item.text || "(untitled)") + '</div>' +
+        '<div class="ei-proj">' + escapeAttr(e.project.name || "(untitled project)") + '</div>' +
+        '<button class="ei-add' + (added ? " done" : "") + '" data-action="journal-readd-today" ' +
+          'data-proj-id="' + e.project.id + '" data-item-id="' + e.item.id + '"' + (added ? " disabled" : "") + '>' +
+          (added ? "✓ Added" : "+ Add to today") +
+        '</button>' +
+      '</div>';
+    }).join("");
+    container.innerHTML =
+      '<div class="journal-card">' +
+        '<div class="question">Want to add these to your list today?</div>' +
+        '<div class="journal-cal-sub">These dropped off your today list at yesterday\'s wind-down.</div>' +
+        '<div class="expired-list">' + rows + '</div>' +
         '<div class="journal-nav">' +
           '<button class="nav-btn" id="journal-prev">← Previous</button>' +
           '<div class="journal-stepper">' + steps + '</div>' +
@@ -5835,13 +5963,32 @@ function wireJournal() {
   });
   const next = container.querySelector('#journal-next');
   if (next) next.addEventListener("click", () => {
-    // Steps go 0..3 (questions) then 4 (calendar). Submit from the calendar step.
-    if (journalStep < JOURNAL_QUESTIONS.length) {
+    // Steps: 0..3 questions, 4 calendar, 5 expired-today (only if any). Submit
+    // from whichever is the last step.
+    const calStep = JOURNAL_QUESTIONS.length;
+    const lastStep = getExpiredTodayTasks().length > 0 ? calStep + 1 : calStep;
+    if (journalStep < lastStep) {
       journalStep++; renderJournal();
     } else {
       journalReviewMode = true;
       renderJournal();
     }
+  });
+
+  // Re-add a task that dropped off yesterday's today list
+  container.querySelectorAll('[data-action="journal-readd-today"]').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const p = findProject(btn.dataset.projId);
+      if (!p) return;
+      const a = findActionable(p, btn.dataset.itemId);
+      if (!a) return;
+      a.today = true;          // back on today's list; keep todayExpiredAt so
+      touchActionable(a);      // the row stays visible (marked "Added")
+      markActionDirty(a.id);
+      saveState();
+      renderJournal();
+    });
   });
 }
 
