@@ -4207,7 +4207,11 @@ function renderFilterBar() {
     '<span class="dot"></span><span>Today</span></button>';
   leftHtml += buildDropdownHtml("status", "Status", fs.status, statusOpts);
   leftHtml += buildDropdownHtml("age", "Age", fs.age, ageOpts);
-  leftHtml += buildDropdownHtml("sort", "Sort", fs.sort, sortOpts);
+  // Sort is Home-only: on project boards order is controlled by drag, so a
+  // sort dropdown there would fight the manual ordering.
+  if (currentView === "home") {
+    leftHtml += buildDropdownHtml("sort", "Sort", fs.sort, sortOpts);
+  }
   if (isStatusFilterActive() || isTodayFilterActive() || isAgeFilterActive()) {
     leftHtml += '<button class="filter-clear" id="filter-clear-btn" title="Clear filters">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
@@ -4364,7 +4368,8 @@ function renderProject(p) {
   // get orphaned by the tree walker).
   visible = withAncestors(p, visible);
 
-  const flat = buildActionableTree(p, visible, actionableComparator(getCurrentFilters().sort));
+  // Boards always render in manual (drag) order — sort lives only on Home.
+  const flat = buildActionableTree(p, visible);
 
   const doneFooter = archived.length > 0
     ? '<div class="done-footer ' + (showArchived ? "expanded" : "") + '" data-action="toggle-done-footer">' +
