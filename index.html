@@ -4502,7 +4502,8 @@ function renderActionable(p, a, depth) {
   depth = depth || 0;
   // Today toggle replaces the old priority chip — clickable pill that flips a.today
   const todayBtn = '<button class="today-toggle' + (a.today ? " on" : "") + '" ' +
-    'data-action="toggle-today" title="Toggle today">TODAY</button>';
+    'data-action="toggle-today" title="Toggle today">' +
+    (a.today ? "Today" : "Not today") + '</button>';
 
   const ageInfo = ageBadgeData(a.updatedAt || a.createdAt);
   const ageBadge = ageInfo
@@ -5183,7 +5184,8 @@ function renderHomeItem(p, a, depth) {
       '</div>';
   }
   const todayBtn = '<button class="today-toggle' + (a.today ? " on" : "") + '" ' +
-    'data-action="home-toggle-today" title="Toggle today">TODAY</button>';
+    'data-action="home-toggle-today" title="Toggle today">' +
+    (a.today ? "Today" : "Not today") + '</button>';
   return (
     '<div class="today-item' + (a.done ? " done" : "") + '" data-depth="' + depth + '" data-project-id="' + p.id + '" data-item-id="' + a.id + '">' +
       '<input type="checkbox" data-action="home-toggle"' + (a.done ? " checked" : "") + '>' +
