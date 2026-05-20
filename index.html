@@ -369,6 +369,8 @@ body.hero-collapsed .hero-compact {
 }
 .hero-compact .hc-wd.done { color: var(--good); }
 .hero-compact .hc-wd.urgent { color: var(--bad); }
+.hero-compact .hc-wd.deep { color: var(--waiting); }
+.hero-compact .hc-wd.deep .lbl { color: var(--waiting); }
 
 /* Mobile: stack the layout */
 @media (max-width: 760px) {
@@ -2561,6 +2563,12 @@ let state = loadState();
 state.projects = state.projects || [];
 state.labels = state.labels || [];
 state.filters = state.filters || {};
+// One-time: move existing users' Home default to "all tasks, today first".
+// (New default lives in getCurrentFilters; this updates already-saved state.)
+if (!state.migratedHomeTodayFirst) {
+  state.filters.home = { status: null, today: false, age: null, sort: "today" };
+  state.migratedHomeTodayFirst = true;
+}
 state.keystone = state.keystone || { date: null, text: "", done: false };
 state.windDown = state.windDown || { hour: 20, minute: 0, lastTriggeredDate: null };
 // Backfill in case stored state is older
@@ -2731,7 +2739,7 @@ function getCurrentFilters() {
   let f = state.filters[currentView];
   if (!f) {
     f = (currentView === "home")
-      ? { status: null, today: true,  age: null }   // Home defaults to today=on
+      ? { status: null, today: false, age: null, sort: "today" } // Home: all tasks, today first
       : { status: null, today: false, age: null };
     state.filters[currentView] = f;
   }
@@ -4132,6 +4140,16 @@ function renderHeroCompact() {
   const now = new Date();
   const dateLabel = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
   let wdHtml;
+
+  // Deep Work overrides the wind-down readout while a session is running.
+  if (state.deepWork && state.deepWork.active) {
+    const remaining = Math.max(0, deepWorkRemainingMs());
+    el.innerHTML = '<span class="hc-date">' + dateLabel + '</span>' +
+      '<span class="hc-wd deep"><span class="lbl">Deep work</span>' +
+        formatCountdown(remaining) + '</span>';
+    return;
+  }
+
   const phase = windDownPhase();
   if (phase === "earned") {
     wdHtml = '<span class="hc-wd done">Wind down, you earned it</span>';
@@ -4155,6 +4173,7 @@ function tickWindDown() {
       return;
     }
     renderWindDown();
+    renderHeroCompact();
     return;
   }
   if (!state.windDown) return;
