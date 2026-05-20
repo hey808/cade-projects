@@ -327,9 +327,11 @@ body > * { position: relative; z-index: 1; }
   max-width: 1100px;
 }
 .main-header {
-  display: flex; justify-content: flex-end; align-items: center;
-  gap: 10px; margin-bottom: 16px; flex-wrap: wrap;
+  display: flex; justify-content: flex-start; align-items: center;
+  gap: 14px; margin-bottom: 16px; flex-wrap: wrap;
 }
+.main-header .hero-toggle-btn { margin-left: auto; }
+#header-stats { display: flex; align-items: center; }
 .header-deep {
   display: inline-flex; align-items: center; gap: 12px;
 }
@@ -1264,7 +1266,7 @@ body.journal-mode .filter-bar { display: none !important; }
 /* Filter bar — filters on the left, metrics centered, new-project on the right */
 .filter-bar {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   align-items: center;
   gap: 12px;
   padding: 0 0 14px;
@@ -2425,6 +2427,7 @@ ul.items li:hover .row-tool { opacity: 1; }
     <input type="text" class="search" id="search-input" placeholder="Search projects, actionables…">
     <kbd>⌘K</kbd>
   </div>
+  <div id="header-stats"></div>
   <button class="hero-toggle-btn" id="hero-toggle" title="Show/hide the day overview">Hide overview</button>
 </header>
 
@@ -4243,8 +4246,11 @@ function renderFilterBar() {
 
   bar.innerHTML =
     '<div class="filter-bar-left">' + leftHtml + '</div>' +
-    renderStatsStrip() +
     '<div class="filter-bar-right">' + circles + deepBtn + newProjectBtn + '</div>';
+
+  // Completed / Total stats now live in the main header, in line with search.
+  const headerStats = document.getElementById("header-stats");
+  if (headerStats) headerStats.innerHTML = renderStatsStrip();
 
   const tgl = document.getElementById("deep-toggle-btn");
   if (tgl) {
@@ -5011,6 +5017,46 @@ function renderHome() {
   const filters = getCurrentFilters();
   const filterActive = filters.status !== null || filters.today === true || filters.age !== null;
 
+  const emptyMsg = () => {
+    if (filters.today === true && filters.status === null && filters.age === null) {
+      return '<h2>Nothing on today</h2>' +
+        '<p>Open a project tab and tap the <strong>Today</strong> pill on any task to add it here.</p>';
+    } else if (filterActive) {
+      return '<h2>Nothing matches the current filters</h2>' +
+        '<p>Try clearing filters above or adjusting the status / age selection.</p>';
+    }
+    return '<h2>No open tasks</h2>' +
+      '<p>Add a project and some actionables to get started.</p>';
+  };
+
+  // When a sort is active, Home becomes a single flat list ordered across ALL
+  // projects. (The grouped-by-project view below only reorders within each
+  // group, which masks the sort unless the list is short — e.g. when the Today
+  // filter is on.) Manual (no sort) keeps the grouped view.
+  const cmp = actionableComparator(filters.sort);
+  if (cmp) {
+    const flat = [];
+    state.projects.forEach(p => {
+      p.actionables.forEach(a => {
+        if (a.archived || !ok(a)) return;
+        flat.push({ project: p, item: a });
+      });
+    });
+    if (flat.length === 0) {
+      container.innerHTML = keystoneHtml + '<div class="empty-state">' + emptyMsg() + '</div>';
+      wireKeystone();
+      return;
+    }
+    flat.sort((x, y) => cmp(x.item, y.item));
+    container.innerHTML = keystoneHtml +
+      '<div class="today-group"><div class="today-list">' +
+        flat.map(e => renderHomeItem(e.project, e.item, 0)).join("") +
+      '</div></div>';
+    wireHomeView();
+    wireKeystone();
+    return;
+  }
+
   const groups = [];
   state.projects.forEach(p => {
     // Done tasks stay on Home (shown struck-through) until archived
@@ -5019,23 +5065,12 @@ function renderHome() {
     // Keep ancestor context so indentation makes sense in the Home list
     items = withAncestors(p, items);
     items = items.filter(a => !a.archived);
-    const tree = buildActionableTree(p, items, actionableComparator(getCurrentFilters().sort));
+    const tree = buildActionableTree(p, items);
     groups.push({ project: p, tree });
   });
 
   if (groups.length === 0) {
-    let msg;
-    if (filters.today === true && filters.status === null && filters.age === null) {
-      msg = '<h2>Nothing on today</h2>' +
-            '<p>Open a project tab and tap the <strong>Today</strong> pill on any task to add it here.</p>';
-    } else if (filterActive) {
-      msg = '<h2>Nothing matches the current filters</h2>' +
-            '<p>Try clearing filters above or adjusting the status / priority selection.</p>';
-    } else {
-      msg = '<h2>No open tasks</h2>' +
-            '<p>Add a project and some actionables to get started.</p>';
-    }
-    container.innerHTML = keystoneHtml + '<div class="empty-state">' + msg + '</div>';
+    container.innerHTML = keystoneHtml + '<div class="empty-state">' + emptyMsg() + '</div>';
     wireKeystone();
     return;
   }
