@@ -2747,7 +2747,8 @@ function getCurrentFilters() {
   if (f.status === undefined)   f.status = null;
   if (f.today === undefined)    f.today = false;
   if (f.age === undefined)      f.age = null;
-  if (f.sort === undefined)     f.sort = null;   // null = manual (drag) order
+  // "Manual" sort is gone — every view defaults to (and falls back to) Today first.
+  if (f.sort === undefined || f.sort === null) f.sort = "today";
   // Drop legacy priority — replaced by Today
   delete f.priority;
   // Legacy status "today" no longer exists — clear it
@@ -2909,12 +2910,30 @@ function withAncestors(p, items) {
 // Projects that should appear in active views (archived ones live in Archive)
 function activeProjects() { return state.projects.filter(p => !p.archived); }
 
-// View → project filter (tab is the category)
+// Most-recent activity timestamp for a project: newest task update, falling
+// back to the project's own creation time (so brand-new empty projects sort to
+// the top until other projects see fresh activity).
+function projectActivityMs(p) {
+  let ms = p.createdAt ? new Date(p.createdAt).getTime() : 0;
+  (p.actionables || []).forEach(a => {
+    const t = new Date(a.updatedAt || a.createdAt || 0).getTime();
+    if (t > ms) ms = t;
+  });
+  return ms;
+}
+function byRecentActivity(arr) {
+  return arr.slice().sort((x, y) => projectActivityMs(y) - projectActivityMs(x));
+}
+
+// View → project filter (tab is the category). Projects are ordered by most
+// recent activity so what you're actively working on rises to the top.
 function projectsInCurrentView() {
   if (currentView === "home") return [];
-  if (currentView === "all")          return activeProjects();
-  if (currentView === "uncategorized") return activeProjects().filter(p => !p.labelId);
-  return activeProjects().filter(p => p.labelId === currentView);
+  let list;
+  if (currentView === "all")               list = activeProjects();
+  else if (currentView === "uncategorized") list = activeProjects().filter(p => !p.labelId);
+  else                                      list = activeProjects().filter(p => p.labelId === currentView);
+  return byRecentActivity(list);
 }
 
 let activeFilterDropdown = null;
@@ -4344,12 +4363,11 @@ function renderFilterBar() {
     { value: "stale",  label: "14+ days",     color: "#dc2626" }
   ];
   const sortOpts = [
-    { value: null,          label: "Manual" },
+    { value: "today",       label: "Today first" },
     { value: "age_new",     label: "Newest first" },
     { value: "age_old",     label: "Oldest first" },
     { value: "status_asc",  label: "Status ↑" },
-    { value: "status_desc", label: "Status ↓" },
-    { value: "today",       label: "Today first" }
+    { value: "status_desc", label: "Status ↓" }
   ];
   let leftHtml = "";
   // Today filter — binary toggle button leads the row
