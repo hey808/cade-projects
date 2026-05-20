@@ -4511,7 +4511,7 @@ function renderActionable(p, a, depth) {
     : "";
 
   let contextRow = "";
-  if (a.status === "stuck") {
+  if (a.status === "stuck" && !a.done) {
     contextRow =
       '<div class="context-row stuck">' +
         '<span class="lbl">Blocker:</span>' +
@@ -5176,7 +5176,7 @@ function renderHomeItem(p, a, depth) {
   const statusChipHtml   = renderStatusChip(p, a);
   const statusPickerHtml = renderStatusPicker(p, a);
   let contextRow = "";
-  if (a.status === "stuck") {
+  if (a.status === "stuck" && !a.done) {
     contextRow =
       '<div class="context-row stuck">' +
         '<span class="lbl">Blocker:</span>' +
