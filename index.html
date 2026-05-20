@@ -317,6 +317,14 @@ body > * { position: relative; z-index: 1; }
 .header-deep {
   display: inline-flex; align-items: center; gap: 12px;
 }
+.hero-toggle-btn {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text-3); font-family: inherit;
+  font-size: 12px; padding: 7px 12px; border-radius: 6px;
+  cursor: pointer; white-space: nowrap;
+}
+.hero-toggle-btn:hover { border-color: var(--border-strong); color: var(--text); }
+body.hero-collapsed .hero-row { display: none; }
 
 /* Mobile: stack the layout */
 @media (max-width: 760px) {
@@ -1215,11 +1223,14 @@ body.journal-mode .filter-bar { display: none !important; }
   justify-self: center;
   flex-wrap: wrap;
 }
-.filter-bar > #new-project-btn { justify-self: end; }
+.filter-bar > .filter-bar-right {
+  justify-self: end;
+  display: flex; align-items: center; gap: 12px;
+}
 @media (max-width: 720px) {
   .filter-bar { grid-template-columns: 1fr; }
   .filter-bar-left, .filter-bar-stats { justify-self: start; }
-  .filter-bar > #new-project-btn { justify-self: start; }
+  .filter-bar > .filter-bar-right { justify-self: start; flex-wrap: wrap; }
 }
 .filter-bar-deep {
   display: flex; align-items: center; gap: 12px;
@@ -2107,7 +2118,7 @@ ul.items li:hover .row-tool { opacity: 1; }
     <input type="text" class="search" id="search-input" placeholder="Search projects, actionables…">
     <kbd>⌘K</kbd>
   </div>
-  <div id="header-deep" class="header-deep"></div>
+  <button class="hero-toggle-btn" id="hero-toggle" title="Show/hide the day overview">Hide overview</button>
 </header>
 
 <div class="hero-row">
@@ -2227,6 +2238,7 @@ delete state.layout.lightMode;
 delete state.layout.warmMode;
 if (!["cool", "light", "professional"].includes(state.layout.theme)) state.layout.theme = "cool";
 if (typeof state.layout.deepWorkMin !== "number" || state.layout.deepWorkMin < 1) state.layout.deepWorkMin = 75;
+if (typeof state.layout.heroCollapsed !== "boolean") state.layout.heroCollapsed = false;
 if (typeof state.layout.projectSplit !== "number") state.layout.projectSplit = 30;
 state.layout.projectSplit = Math.max(15, Math.min(70, state.layout.projectSplit));
 // Apply it now so first paint reflects the saved width + theme
@@ -2234,6 +2246,7 @@ document.documentElement.style.setProperty('--proj-split', state.layout.projectS
 document.body.classList.remove('light-mode', 'professional-mode');
 if (state.layout.theme === 'light')        document.body.classList.add('light-mode');
 if (state.layout.theme === 'professional') document.body.classList.add('professional-mode');
+if (state.layout.heroCollapsed) document.body.classList.add('hero-collapsed');
 // Migrate older flat-shape filters (status/priority/statuses/labelIds at top level)
 // to the new per-view map. The old global filter is discarded — each view now
 // keeps its own filter selection, with "home" lazily defaulting to status="today".
@@ -3292,7 +3305,7 @@ function startDeepWork() {
   };
   saveState();
   renderWindDown();
-  renderHeaderDeep();
+  renderFilterBar();
 }
 function endDeepWork(opts) {
   const playChime = opts && opts.playChime;
@@ -3312,7 +3325,7 @@ function endDeepWork(opts) {
   saveState();
   if (playChime) playPeacefulChime();
   renderWindDown();
-  renderHeaderDeep();
+  renderFilterBar();
 }
 
 // ─── Wind-down countdown ──────────────────────────────
@@ -3827,17 +3840,37 @@ function renderFilterBar() {
     leftHtml += '<button class="filter-clear" id="filter-clear-btn">Clear filters</button>';
   }
 
-  // "+ New project" sits on the far right of the filter bar — subtle ghost style
+  // Right side of the filter bar: deep-work cluster + New project button
   const newProjectBtn = '<button class="btn subtle-action" id="new-project-btn" ' +
     'title="Create a new project">+ New project</button>';
+
+  const dwActive = !!(state.deepWork && state.deepWork.active);
+  const today = todayDateString();
+  const completedToday = (state.deepWork.completedDate === today)
+    ? (state.deepWork.completedToday || 0) : 0;
+  let circles = '<div class="deep-circles" title="' + completedToday + ' of 3 sessions today">';
+  for (let i = 0; i < 3; i++) {
+    circles += '<span class="dc' + (i < completedToday ? " filled" : "") + '"></span>';
+  }
+  circles += '</div>';
+  const deepBtn = '<button class="btn accent' + (dwActive ? " ending" : "") + '" id="deep-toggle-btn" ' +
+    'title="' + (dwActive ? "End the focus session" : "Start a focus session") + '">' +
+    (dwActive ? "End deep work" : "Start deep work") +
+  '</button>';
 
   bar.innerHTML =
     '<div class="filter-bar-left">' + leftHtml + '</div>' +
     renderStatsStrip() +
-    newProjectBtn;
+    '<div class="filter-bar-right">' + circles + deepBtn + newProjectBtn + '</div>';
 
-  // Deep-work toggle + session circles now live in the page header
-  renderHeaderDeep();
+  const tgl = document.getElementById("deep-toggle-btn");
+  if (tgl) {
+    tgl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (state.deepWork && state.deepWork.active) endDeepWork({ playChime: false });
+      else startDeepWork();
+    });
+  }
 
   bar.querySelectorAll('.filter-dropdown-btn').forEach(btn => {
     btn.addEventListener("click", (e) => {
@@ -4110,7 +4143,6 @@ function renderActionable(p, a, depth) {
         gcalBtn +
         notesBtn +
         archiveBtn +
-        '<button class="li-rm" data-action="remove-actionable" title="Remove">×</button>' +
       '</div>' +
       contextRow +
       notesPanel +
@@ -5472,6 +5504,24 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   activeWindDownEditor = true;
   renderWindDownModal();
 });
+
+// Collapse / expand the day-overview hero row
+(function () {
+  const btn = document.getElementById("hero-toggle");
+  if (!btn) return;
+  function reflect() {
+    const collapsed = !!(state.layout && state.layout.heroCollapsed);
+    btn.textContent = collapsed ? "Show overview" : "Hide overview";
+  }
+  reflect();
+  btn.addEventListener("click", () => {
+    state.layout = state.layout || {};
+    state.layout.heroCollapsed = !state.layout.heroCollapsed;
+    document.body.classList.toggle("hero-collapsed", state.layout.heroCollapsed);
+    saveState();
+    reflect();
+  });
+})();
 
 // ─── Auth + Cloud Sync ─────────────────────────────────
 function showAuthScreen() {
