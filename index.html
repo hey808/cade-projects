@@ -401,6 +401,7 @@ input.search:focus + kbd { display: none; }
   cursor: pointer; user-select: none;
   transition: border-color 0.15s, background 0.15s;
   min-height: 100px;
+  box-sizing: border-box;
 }
 .wind-down:hover { border-color: rgba(255, 107, 71, 0.55); }
 .wind-down .wd-circle { flex-shrink: 0; }
@@ -1030,16 +1031,18 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 .wind-down-popover .wd-trigger:hover { color: var(--accent); border-color: var(--accent); }
 
-/* Daily progress dashboard — date on left, circular progress on right */
+/* Daily progress dashboard — date on left, circular progress on right.
+   Matches the wind-down card's box exactly so the two read as a pair. */
 .daily-dashboard {
-  background: linear-gradient(135deg, #1f2026 0%, var(--bg) 100%);
-  border: 1px solid rgba(255, 107, 71, 0.28);
+  background: linear-gradient(135deg, rgba(255,107,71,0.14), rgba(255,107,71,0.02));
+  border: 1px solid rgba(255, 107, 71, 0.35);
   border-radius: 12px;
   padding: 16px 22px;
   display: flex; flex-direction: row; align-items: center;
   justify-content: space-between;
   gap: 22px;
   min-height: 100px;
+  box-sizing: border-box;
 }
 .dd-date {
   font-family: var(--font-sans);
@@ -1236,11 +1239,15 @@ body.journal-mode .filter-bar { display: none !important; }
   display: flex; align-items: center; gap: 12px;
 }
 .filter-bar-stats .stat {
-  display: inline-flex; align-items: baseline; gap: 6px;
+  display: inline-flex; align-items: baseline; gap: 7px;
   white-space: nowrap;
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 7px 13px;
+  border-radius: 6px;
 }
 .filter-bar-stats .stat .lbl {
-  font-size: 9px; color: var(--text-3);
+  font-size: 10px; color: var(--text-3);
   text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
 }
 .filter-bar-stats .stat .val {
@@ -3841,7 +3848,8 @@ function renderFilterBar() {
   }
 
   // Right side of the filter bar: deep-work cluster + New project button
-  const newProjectBtn = '<button class="btn subtle-action" id="new-project-btn" ' +
+  // New project is the primary (accent) action; deep work is the subtle one.
+  const newProjectBtn = '<button class="btn accent" id="new-project-btn" ' +
     'title="Create a new project">+ New project</button>';
 
   const dwActive = !!(state.deepWork && state.deepWork.active);
@@ -3853,7 +3861,7 @@ function renderFilterBar() {
     circles += '<span class="dc' + (i < completedToday ? " filled" : "") + '"></span>';
   }
   circles += '</div>';
-  const deepBtn = '<button class="btn accent' + (dwActive ? " ending" : "") + '" id="deep-toggle-btn" ' +
+  const deepBtn = '<button class="btn subtle-action' + (dwActive ? " ending" : "") + '" id="deep-toggle-btn" ' +
     'title="' + (dwActive ? "End the focus session" : "Start a focus session") + '">' +
     (dwActive ? "End deep work" : "Start deep work") +
   '</button>';
@@ -4534,19 +4542,12 @@ function projectsInStatScope() {
   if (currentView === "home") return state.projects;
   return projectsInCurrentView();
 }
-function calcStatsOpenTotal() {
+// Total = how many actionables the active filter is currently showing
+function calcStatsTotal() {
   let n = 0;
   projectsInStatScope().forEach(p => p.actionables.forEach(a => {
     if (a.archived) return;
-    if (!a.done && passesAllItemFilters(a)) n++;
-  }));
-  return n;
-}
-function calcStatsTodayCount() {
-  let n = 0;
-  projectsInStatScope().forEach(p => p.actionables.forEach(a => {
-    if (a.archived) return;
-    if (!a.done && a.today && passesAllItemFilters(a)) n++;
+    if (passesAllItemFilters(a)) n++;
   }));
   return n;
 }
@@ -4568,13 +4569,11 @@ function calcStatsCompletedThisWeek() {
 }
 
 function renderStatsStrip() {
-  const total = calcStatsOpenTotal();
-  const today = calcStatsTodayCount();
+  const total = calcStatsTotal();
   const done  = calcStatsCompletedThisWeek();
   return '<div class="filter-bar-stats">' +
-    '<div class="stat high"><span class="lbl">Today</span><span class="val">' + today + '</span></div>' +
-    '<div class="stat"><span class="lbl">Total</span><span class="val">' + total + '</span></div>' +
     '<div class="stat good"><span class="lbl">Completed</span><span class="val">' + done + '</span></div>' +
+    '<div class="stat"><span class="lbl">Total</span><span class="val">' + total + '</span></div>' +
   '</div>';
 }
 
@@ -4638,7 +4637,8 @@ function renderHome() {
 
   const groups = [];
   state.projects.forEach(p => {
-    let items = p.actionables.filter(a => !a.archived && !a.done && ok(a));
+    // Done tasks stay on Home (shown struck-through) until archived
+    let items = p.actionables.filter(a => !a.archived && ok(a));
     if (!items.length) return;
     // Keep ancestor context so indentation makes sense in the Home list
     items = withAncestors(p, items);
