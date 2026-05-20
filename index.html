@@ -2318,7 +2318,7 @@ ul.items li:hover .row-tool { opacity: 1; }
       <div class="ln-problem">
         <div class="ln-num">02</div>
         <h3>Priority creep</h3>
-        <p>You can't focus on the important task when everything is an important task. In Slate, anything you mark <strong>Today</strong> has its status cleared at midnight — so every morning starts honest.</p>
+        <p>You can't focus on the important task when everything is an important task. In Slate, anything you mark <strong>Today</strong> is cleared at your wind-down time each evening — so every morning starts honest.</p>
       </div>
     </div>
   </section>
@@ -3812,7 +3812,7 @@ function renderWindDownModal() {
           '<input type="time" class="wd-time-input" id="wd-time-input" ' +
             'value="' + String(state.windDown.hour).padStart(2, "0") + ":" +
                         String(state.windDown.minute).padStart(2, "0") + '">' +
-          '<div class="wd-hint">When the countdown hits zero, every open <strong>Today</strong> task has its status cleared so tomorrow starts blank.</div>' +
+          '<div class="wd-hint">At your wind-down time, every open task flagged <strong>Today</strong> is un-flagged — so tomorrow starts with a clear list. Completed tasks and their statuses are left untouched.</div>' +
           '<button class="wd-trigger" id="wd-trigger-now">Wind down now</button>' +
           undoHtml +
         '</div>' +
@@ -3954,11 +3954,8 @@ function triggerWindDown(manual) {
   state.projects.forEach(p => {
     p.actionables.forEach(a => {
       if (a.done) return;
-      if (a.status !== "today") return;
-      a.status = null;
-      a.stuckSince = null;
-      a.blocker = "";
-      a.waitingFor = "";
+      if (!a.today) return;          // only items currently on today's list
+      a.today = false;              // clear the Today flag for a fresh tomorrow
       touchActionable(a);
       markActionDirty(a.id);
       cleared++;
