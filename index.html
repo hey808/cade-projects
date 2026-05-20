@@ -340,7 +340,33 @@ body > * { position: relative; z-index: 1; }
   cursor: pointer; white-space: nowrap;
 }
 .hero-toggle-btn:hover { border-color: var(--border-strong); color: var(--text); }
+
+/* Collapsed overview: hide the full cards, show a slim summary bar that
+   still surfaces the date + time until wind-down. */
+.hero-compact { display: none; }
 body.hero-collapsed .hero-row { display: none; }
+body.hero-collapsed .hero-compact {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+  padding: 10px 18px; margin-bottom: 14px;
+  background: linear-gradient(135deg, rgba(255,107,71,0.14), rgba(255,107,71,0.02));
+  border: 1px solid rgba(255, 107, 71, 0.35);
+  border-radius: 10px;
+}
+.hero-compact .hc-date {
+  font-weight: 800; font-size: 14px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.hero-compact .hc-wd {
+  font-size: 14px; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.hero-compact .hc-wd .lbl {
+  color: var(--text-3); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em; margin-right: 8px;
+}
+.hero-compact .hc-wd.done { color: var(--good); }
+.hero-compact .hc-wd.urgent { color: var(--bad); }
 
 /* Mobile: stack the layout */
 @media (max-width: 760px) {
@@ -2318,7 +2344,7 @@ ul.items li:hover .row-tool { opacity: 1; }
       <div class="ln-problem">
         <div class="ln-num">02</div>
         <h3>Priority creep</h3>
-        <p>You can't focus on the important task when everything is an important task. In Slate, anything you mark <strong>Today</strong> is cleared at your wind-down time each evening — so every morning starts honest.</p>
+        <p>You can't focus on the important task when everything is an important task. At your wind-down time each evening, Slate clears your <strong>Today</strong> flags and archives what you finished — so every morning starts honest.</p>
       </div>
     </div>
   </section>
@@ -2397,6 +2423,7 @@ ul.items li:hover .row-tool { opacity: 1; }
   </div>
   <div id="wind-down-wrap"></div>
 </div>
+<div class="hero-compact" id="hero-compact"></div>
 
 <div class="filter-bar" id="filter-bar"></div>
 
@@ -3812,7 +3839,7 @@ function renderWindDownModal() {
           '<input type="time" class="wd-time-input" id="wd-time-input" ' +
             'value="' + String(state.windDown.hour).padStart(2, "0") + ":" +
                         String(state.windDown.minute).padStart(2, "0") + '">' +
-          '<div class="wd-hint">At your wind-down time, every open task flagged <strong>Today</strong> is un-flagged — so tomorrow starts with a clear list. Completed tasks and their statuses are left untouched.</div>' +
+          '<div class="wd-hint">At your wind-down time, open tasks flagged <strong>Today</strong> are un-flagged and completed tasks are sent to the <strong>Archive</strong> — so tomorrow starts with a clear list.</div>' +
           '<button class="wd-trigger" id="wd-trigger-now">Wind down now</button>' +
           undoHtml +
         '</div>' +
@@ -3951,9 +3978,19 @@ function triggerWindDown(manual) {
   const today = todayDateString();
   if (state.windDown.lastTriggeredDate === today) return;
   let cleared = 0;
+  const nowIso = new Date().toISOString();
   state.projects.forEach(p => {
     p.actionables.forEach(a => {
-      if (a.done) return;
+      if (a.archived) return;
+      if (a.done) {
+        // Completed tasks get archived at wind-down
+        a.archived = true;
+        a.archivedAt = nowIso;
+        touchActionable(a);
+        markActionDirty(a.id);
+        cleared++;
+        return;
+      }
       if (!a.today) return;          // only items currently on today's list
       a.today = false;              // clear the Today flag for a fresh tomorrow
       touchActionable(a);
@@ -3970,6 +4007,28 @@ function triggerWindDown(manual) {
     const wrap = document.getElementById("wind-down-wrap");
     if (wrap) wrap.title = "Wound down " + cleared + " task" + (cleared === 1 ? "" : "s");
   }
+}
+
+// Slim summary bar shown when the overview is collapsed — date + wind-down
+function renderHeroCompact() {
+  const el = document.getElementById("hero-compact");
+  if (!el) return;
+  const now = new Date();
+  const dateLabel = now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  let wdHtml;
+  const phase = windDownPhase();
+  if (phase === "earned") {
+    wdHtml = '<span class="hc-wd done">Wind down, you earned it</span>';
+  } else {
+    const startMs  = getDayStartToday().getTime();
+    const targetMs = getWindDownTargetToday().getTime();
+    const nowMs = Date.now();
+    const ms = (nowMs < startMs || nowMs >= targetMs) ? 0 : targetMs - nowMs;
+    const urgent = ms > 0 && ms < 30 * 60 * 1000;
+    wdHtml = '<span class="hc-wd' + (urgent ? " urgent" : "") + '">' +
+      '<span class="lbl">Wind-down in</span>' + formatCountdown(ms) + '</span>';
+  }
+  el.innerHTML = '<span class="hc-date">' + dateLabel + '</span>' + wdHtml;
 }
 
 function tickWindDown() {
@@ -3995,6 +4054,7 @@ function tickWindDown() {
   // Don't redraw while user is editing the popover (would steal focus)
   if (activeWindDownEditor) return;
   renderWindDown();
+  renderHeroCompact();
 }
 
 // Close the popover on outside click
@@ -5676,6 +5736,7 @@ function renderAll() {
   renderDateHeader();
   renderDailyDashboard();
   renderWindDown();
+  renderHeroCompact();
   renderFilterBar();
   renderTabs();
   // Re-validate currentView in case labels/projects changed
@@ -5776,7 +5837,7 @@ document.getElementById("settings-btn").addEventListener("click", () => {
   if (!btn) return;
   function reflect() {
     const collapsed = !!(state.layout && state.layout.heroCollapsed);
-    btn.textContent = collapsed ? "Show overview" : "Hide overview";
+    btn.textContent = collapsed ? "Expand overview" : "Collapse overview";
   }
   reflect();
   btn.addEventListener("click", () => {
@@ -5785,6 +5846,7 @@ document.getElementById("settings-btn").addEventListener("click", () => {
     document.body.classList.toggle("hero-collapsed", state.layout.heroCollapsed);
     saveState();
     reflect();
+    renderHeroCompact();
   });
 })();
 
