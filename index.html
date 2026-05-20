@@ -2689,6 +2689,7 @@ function getCurrentFilters() {
   if (f.status === undefined)   f.status = null;
   if (f.today === undefined)    f.today = false;
   if (f.age === undefined)      f.age = null;
+  if (f.sort === undefined)     f.sort = null;   // null = manual (drag) order
   // Drop legacy priority — replaced by Today
   delete f.priority;
   // Legacy status "today" no longer exists — clear it
@@ -2735,7 +2736,29 @@ function setFilter(type, value) {
   if (type === "status")     f.status = value;
   else if (type === "today") f.today  = !!value;
   else if (type === "age")   f.age    = value;
+  else if (type === "sort")  f.sort   = value;
   saveState();
+}
+
+// ─── Sorting ───────────────────────────────────────────
+// Status order (ascending): in progress → stuck → backburner → no status
+function statusRank(s) {
+  const order = { in_progress: 0, stuck: 1, backburner: 2 };
+  return (s && order[s] !== undefined) ? order[s] : 3;
+}
+function actionableAgeMs(a) {
+  return new Date(a.updatedAt || a.createdAt || 0).getTime();
+}
+function actionableComparator(sortKey) {
+  if (!sortKey) return null; // manual / drag order
+  switch (sortKey) {
+    case "age_new":     return (a, b) => actionableAgeMs(b) - actionableAgeMs(a);
+    case "age_old":     return (a, b) => actionableAgeMs(a) - actionableAgeMs(b);
+    case "status_asc":  return (a, b) => statusRank(a.status) - statusRank(b.status);
+    case "status_desc": return (a, b) => statusRank(b.status) - statusRank(a.status);
+    case "today":       return (a, b) => (b.today ? 1 : 0) - (a.today ? 1 : 0);
+    default: return null;
+  }
 }
 function clearFilters() {
   const f = getCurrentFilters();
@@ -2793,15 +2816,17 @@ function isAncestorOf(p, ancestorId, descendantId) {
   return false;
 }
 // Linearize the tree in render order, with depth annotations.
-function buildActionableTree(p, items) {
-  // items: subset of p.actionables to be considered "visible". The result
-  // preserves p.actionables ordering and the parent→child structure.
+function buildActionableTree(p, items, cmp) {
+  // items: subset of p.actionables to be considered "visible". Preserves the
+  // parent→child structure. Siblings keep p.actionables (drag) order unless a
+  // comparator `cmp` is supplied, in which case each sibling group is sorted.
   const visibleIds = new Set(items.map(a => a.id));
   const out = [];
   function walk(parentId, depth) {
-    p.actionables
-      .filter(a => (a.parentId || null) === (parentId || null) && visibleIds.has(a.id))
-      .forEach(a => { out.push({ item: a, depth }); walk(a.id, depth + 1); });
+    let kids = p.actionables.filter(a =>
+      (a.parentId || null) === (parentId || null) && visibleIds.has(a.id));
+    if (cmp) kids = kids.slice().sort(cmp);
+    kids.forEach(a => { out.push({ item: a, depth }); walk(a.id, depth + 1); });
   }
   walk(null, 0);
   return out;
@@ -4167,6 +4192,14 @@ function renderFilterBar() {
     { value: "warn",   label: "7–13 days",    color: "#eab308" },
     { value: "stale",  label: "14+ days",     color: "#dc2626" }
   ];
+  const sortOpts = [
+    { value: null,          label: "Manual" },
+    { value: "age_new",     label: "Newest first" },
+    { value: "age_old",     label: "Oldest first" },
+    { value: "status_asc",  label: "Status ↑" },
+    { value: "status_desc", label: "Status ↓" },
+    { value: "today",       label: "Today first" }
+  ];
   let leftHtml = "";
   // Today filter — binary toggle button leads the row
   leftHtml += '<button class="filter-toggle' + (fs.today ? " active" : "") + '" ' +
@@ -4174,6 +4207,7 @@ function renderFilterBar() {
     '<span class="dot"></span><span>Today</span></button>';
   leftHtml += buildDropdownHtml("status", "Status", fs.status, statusOpts);
   leftHtml += buildDropdownHtml("age", "Age", fs.age, ageOpts);
+  leftHtml += buildDropdownHtml("sort", "Sort", fs.sort, sortOpts);
   if (isStatusFilterActive() || isTodayFilterActive() || isAgeFilterActive()) {
     leftHtml += '<button class="filter-clear" id="filter-clear-btn" title="Clear filters">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
@@ -4330,7 +4364,7 @@ function renderProject(p) {
   // get orphaned by the tree walker).
   visible = withAncestors(p, visible);
 
-  const flat = buildActionableTree(p, visible);
+  const flat = buildActionableTree(p, visible, actionableComparator(getCurrentFilters().sort));
 
   const doneFooter = archived.length > 0
     ? '<div class="done-footer ' + (showArchived ? "expanded" : "") + '" data-action="toggle-done-footer">' +
@@ -4980,7 +5014,7 @@ function renderHome() {
     // Keep ancestor context so indentation makes sense in the Home list
     items = withAncestors(p, items);
     items = items.filter(a => !a.archived);
-    const tree = buildActionableTree(p, items);
+    const tree = buildActionableTree(p, items, actionableComparator(getCurrentFilters().sort));
     groups.push({ project: p, tree });
   });
 
