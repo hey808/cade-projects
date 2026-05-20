@@ -286,7 +286,9 @@ body > * { position: relative; z-index: 1; }
 }
 .sidebar-footer .btn {
   text-align: left;
+  justify-content: flex-start;
   width: 100%;
+  height: auto;
   background: transparent;
   border: none;
   color: var(--text-3);
@@ -1239,12 +1241,12 @@ body.journal-mode .filter-bar { display: none !important; }
   display: flex; align-items: center; gap: 12px;
 }
 .filter-bar-stats .stat {
-  display: inline-flex; align-items: baseline; gap: 7px;
+  display: inline-flex; align-items: center; gap: 7px;
   white-space: nowrap;
   background: var(--card);
   border: 1px solid var(--border);
-  padding: 7px 13px;
-  border-radius: 6px;
+  height: 34px; padding: 0 13px;
+  border-radius: 7px;
 }
 .filter-bar-stats .stat .lbl {
   font-size: 10px; color: var(--text-3);
@@ -1265,7 +1267,7 @@ body.journal-mode .filter-bar { display: none !important; }
   display: inline-flex; align-items: center; gap: 6px;
   background: var(--card); border: 1px solid var(--border);
   color: var(--text-2);
-  padding: 7px 12px; border-radius: 6px;
+  height: 34px; padding: 0 13px; border-radius: 7px;
   font-size: 12px; font-weight: 500;
   cursor: pointer; font-family: inherit;
   white-space: nowrap;
@@ -1302,31 +1304,36 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 
 .filter-clear {
-  font-size: 11px; color: var(--text-3);
-  background: none; border: none; cursor: pointer;
-  text-decoration: underline; font-family: inherit;
-  margin-left: auto;
+  display: inline-flex; align-items: center;
+  height: 34px; padding: 0 13px;
+  font-size: 12px; font-weight: 500; color: var(--text-3);
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 7px; cursor: pointer; font-family: inherit;
+  white-space: nowrap;
 }
-.filter-clear:hover { color: var(--text); }
+.filter-clear:hover { color: var(--text); border-color: var(--border-strong); }
 
 /* Buttons */
 .btn {
-  background: var(--text); color: var(--bg); border: none; border-radius: 6px;
-  padding: 8px 14px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--text); color: var(--bg);
+  border: 1px solid transparent; border-radius: 7px;
+  height: 34px; padding: 0 14px;
+  font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;
+  white-space: nowrap;
 }
 .btn:hover { background: var(--text-2); }
-.btn.accent { background: var(--accent); color: #0a0a0a; }
-.btn.accent:hover { background: #fbbf24; }
+.btn.accent { background: var(--accent); color: #0a0a0a; border-color: var(--accent); }
+.btn.accent:hover { background: #ff7a59; border-color: #ff7a59; }
 .btn.ghost {
   background: transparent; border: 1px solid var(--border-strong);
-  color: var(--text-2); padding: 5px 10px; font-size: 11px;
+  color: var(--text-2);
 }
 .btn.ghost:hover { background: var(--card-hover); color: var(--text); }
 .btn.subtle-action {
   background: transparent;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   color: var(--text-2);
-  padding: 7px 12px; font-size: 12px; font-weight: 500;
 }
 .btn.subtle-action:hover {
   background: var(--card-hover);
@@ -1335,8 +1342,9 @@ body.journal-mode .filter-bar { display: none !important; }
 }
 .btn.add-line {
   background: transparent; border: 1px dashed var(--border-strong); color: var(--text-3);
-  padding: 7px 11px; font-size: 12px; width: 100%; text-align: left;
-  border-radius: 5px; margin-top: 8px;
+  height: auto; padding: 8px 11px; font-size: 12px; width: 100%;
+  justify-content: flex-start; text-align: left;
+  border-radius: 6px; margin-top: 8px;
 }
 .btn.add-line:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -1619,12 +1627,14 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
 
 /* Today toggle pill — replaces the old priority chip on each task row */
 .today-toggle {
+  display: inline-flex; align-items: center;
   background: transparent; border: 1px solid var(--border-strong);
   color: var(--text-4);
-  padding: 2px 9px; border-radius: 9px;
+  height: 22px; padding: 0 10px; border-radius: 8px;
   cursor: pointer; font-family: inherit;
   font-size: 10px; font-weight: 700;
-  letter-spacing: 0.06em; white-space: nowrap; flex-shrink: 0;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  white-space: nowrap; flex-shrink: 0;
 }
 .today-toggle:hover { background: var(--card-hover); color: var(--text-2); }
 .today-toggle.on {
@@ -1641,7 +1651,7 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
 .filter-toggle {
   display: inline-flex; align-items: center; gap: 6px;
   background: var(--card); border: 1px solid var(--border);
-  color: var(--text-2); padding: 7px 12px; border-radius: 6px;
+  color: var(--text-2); height: 34px; padding: 0 13px; border-radius: 7px;
   font-size: 12px; font-weight: 500;
   cursor: pointer; font-family: inherit;
 }
@@ -1671,11 +1681,11 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
 .status-wrap { position: relative; flex-shrink: 0; }
 .status-chip {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 3px 10px; border-radius: 10px;
-  font-size: 11px; font-weight: 600;
+  height: 22px; padding: 0 10px; border-radius: 8px;
+  font-size: 10px; font-weight: 700;
   cursor: pointer; font-family: inherit;
   border: 1px solid transparent;
-  text-transform: uppercase; letter-spacing: 0.04em;
+  text-transform: uppercase; letter-spacing: 0.05em;
   white-space: nowrap;
 }
 .status-chip.unset {
@@ -1883,9 +1893,11 @@ ul.items li:hover .row-tool { opacity: 1; }
 .today-item .text { flex: 1; font-size: 14px; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .today-item.done .text { color: var(--text-4); text-decoration: line-through; }
 .today-item .proj-tag {
+  display: inline-flex; align-items: center;
+  height: 22px; padding: 0 10px; border-radius: 8px;
   font-size: 11px; color: var(--text-2);
-  background: var(--card-hover); padding: 3px 9px; border-radius: 8px;
-  font-weight: 500; cursor: pointer; white-space: nowrap;
+  background: var(--card-hover);
+  font-weight: 600; cursor: pointer; white-space: nowrap;
 }
 .today-item .proj-tag:hover { background: #2a2a30; color: var(--text); }
 
