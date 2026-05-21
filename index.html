@@ -2950,9 +2950,11 @@ function freezeToManualSort() {
   if (f.sort === "manual") return; // already manual — nothing to freeze
   const cmp = actionableComparator(f.sort);
   if (cmp) {
-    // 1. Freeze each project's item order. buildActionableTree linearizes the
-    //    tree (parents before children, subtrees contiguous) in the comparator's
-    //    sibling order — a valid manual ordering that matches what's rendered.
+    // Freeze each project's TASK order. buildActionableTree linearizes the tree
+    // (parents before children, subtrees contiguous) in the comparator's sibling
+    // order — a valid manual ordering that matches what's currently rendered.
+    // (Project-card order is never touched by sort, so there's nothing to freeze
+    // there — cards stay in the order you've dragged them into.)
     state.projects.forEach(p => {
       const ordered = buildActionableTree(p, p.actionables, cmp).map(n => n.item);
       if (ordered.length === p.actionables.length) {
@@ -2960,15 +2962,6 @@ function freezeToManualSort() {
         p.actionables.forEach(a => markActionDirty(a.id)); // persist new positions
       }
     });
-    // 2. Freeze the project-card order. Any active sort lists cards by recent
-    //    activity; manual uses the stored order, so bake the activity order in
-    //    too or the cards themselves would jump.
-    const activeOrder = byRecentActivity(activeProjects());
-    if (activeOrder.length) {
-      const archivedRest = state.projects.filter(p => p.archived);
-      state.projects = activeOrder.concat(archivedRest);
-      markAllProjectsDirty();
-    }
   }
   f.sort = "manual";
   saveState();
@@ -3104,17 +3097,17 @@ function byRecentActivity(arr) {
   return arr.slice().sort((x, y) => projectActivityMs(y) - projectActivityMs(x));
 }
 
-// View → project filter (tab is the category). Projects are ordered by most
-// recent activity so what you're actively working on rises to the top.
+// View → project filter (tab is the category). Projects always render in their
+// stored (manual) order — you arrange the cards by dragging, and the Sort
+// dropdown only ever reorders TASKS, never the project cards. The "Tidy by
+// activity" button is the one-shot way to re-arrange cards by recent activity.
 function projectsInCurrentView() {
   if (currentView === "home") return [];
   let list;
   if (currentView === "all")               list = activeProjects();
   else if (currentView === "uncategorized") list = activeProjects().filter(p => !p.labelId);
   else                                      list = activeProjects().filter(p => p.labelId === currentView);
-  // Manual sort keeps projects in their stored order so editing a task never
-  // reshuffles the board; any active sort orders them by most recent activity.
-  return (getCurrentFilters().sort === "manual") ? list : byRecentActivity(list);
+  return list;
 }
 
 let activeFilterDropdown = null;
@@ -4810,6 +4803,13 @@ function renderFilterBar() {
   leftHtml += buildDropdownHtml("status", "Status", fs.status, statusOpts);
   leftHtml += buildDropdownHtml("age", "Age", fs.age, ageOpts);
   leftHtml += buildDropdownHtml("sort", "Sort", fs.sort, sortOpts);
+  // "Tidy" one-shot arranges the project cards by most recent activity (board
+  // views only — Home has no cards). Cards stay draggable/manual afterwards.
+  if (currentView !== "home") {
+    leftHtml += '<button class="filter-dropdown-btn" id="tidy-projects-btn" ' +
+      'title="Arrange project cards by most recent activity">' +
+      '<span class="value">Tidy</span></button>';
+  }
   if (isStatusFilterActive() || isTodayFilterActive() || isAgeFilterActive()) {
     leftHtml += '<button class="filter-clear" id="filter-clear-btn" title="Clear filters">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
@@ -4853,6 +4853,14 @@ function renderFilterBar() {
       e.stopPropagation();
       if (state.deepWork && state.deepWork.active) endDeepWork({ playChime: false });
       else startDeepWork();
+    });
+  }
+
+  const tidyBtn = document.getElementById("tidy-projects-btn");
+  if (tidyBtn) {
+    tidyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      tidyProjectsByActivity();
     });
   }
 
@@ -4986,6 +4994,7 @@ function renderProject(p) {
 
   return (
     '<article class="project" data-project-id="' + p.id + '" ' + colorAttrs + '>' +
+      '<div class="drag-handle" draggable="true" title="Drag to reorder this project">⠿</div>' +
       '<div class="proj-header">' +
         '<div class="proj-name" contenteditable="true" data-placeholder="Project name" spellcheck="false">' +
           escapeAttr(p.name) +
@@ -5151,6 +5160,7 @@ function renderActionable(p, a, depth) {
         (depth > 0
           ? '<button class="indent-archive" data-action="archive-actionable" title="Archive this subtask"></button>'
           : "") +
+        '<span class="item-drag-handle" draggable="true" title="Drag to reorder">⠿</span>' +
         '<input type="checkbox" data-action="toggle-actionable"' + (a.done ? " checked" : "") + '>' +
         subtaskBtn +
         '<input type="text" class="item-text" data-action="update-actionable" ' +
@@ -5399,15 +5409,123 @@ function endProjectSplitDrag() {
 }
 
 function attachDragHandlers() {
-  // Project- and task-reordering drag was removed in favor of the Sort dropdown
-  // and the + Subtask button. The only draggable thing left on a board is the
-  // column-split divider that resizes the project-name column.
   document.querySelectorAll('.project').forEach(article => {
     const divider = article.querySelector('[data-proj-divider]');
     if (divider && !divider.dataset.wired) {
       divider.dataset.wired = "1";
       divider.addEventListener("mousedown", (e) => startProjectSplitDrag(e, divider, article));
     }
+    wireProjectDrag(article);
+    wireTaskDrag(article);
+  });
+}
+
+// ─── Project drag-to-reorder ───────────────────────────
+// You arrange the cards by dragging the ⠿ handle. The same drag also drops onto
+// a sidebar tab to move the project to that board (handled in renderTabs). The
+// card itself is the drop zone; only the handle is draggable so text selection
+// inside the card still works.
+function wireProjectDrag(article) {
+  if (article.dataset.dragWired) return;
+  article.dataset.dragWired = "1";
+  const handle = article.querySelector('.drag-handle');
+  if (handle) {
+    handle.addEventListener('dragstart', (e) => {
+      e.stopPropagation();
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("application/x-project", article.dataset.projectId);
+      // Show the whole card as the drag image, not just the little handle.
+      try { e.dataTransfer.setDragImage(article, 20, 20); } catch (_) {}
+      article.classList.add('dragging');
+    });
+    handle.addEventListener('dragend', () => {
+      article.classList.remove('dragging');
+      document.querySelectorAll('.project.drag-over').forEach(el => el.classList.remove('drag-over'));
+    });
+  }
+  article.addEventListener('dragover', (e) => {
+    if (!Array.from(e.dataTransfer.types).includes("application/x-project")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (!article.classList.contains('dragging')) article.classList.add('drag-over');
+  });
+  article.addEventListener('dragleave', (e) => {
+    // Only clear when actually leaving the card (not when crossing a child).
+    if (!article.contains(e.relatedTarget)) article.classList.remove('drag-over');
+  });
+  article.addEventListener('drop', (e) => {
+    const draggedId = e.dataTransfer.getData("application/x-project");
+    if (!draggedId) return;
+    e.preventDefault();
+    article.classList.remove('drag-over');
+    const targetId = article.dataset.projectId;
+    if (draggedId !== targetId) reorderProjects(draggedId, targetId);
+  });
+}
+
+// ─── Task drag-to-reorder (within a project) ───────────
+// Drag the ⠿ handle on a row. Drop near the top/bottom of another row to place
+// it above/below as a sibling, or over the middle to nest it as a subtask.
+// Dragging is a manual reorder, so it freezes any active task sort first.
+let _taskDrag = null; // { projId, itemId } while a task drag is in flight
+function clearTaskDropIndicators(scope) {
+  (scope || document).querySelectorAll('.drag-over-above,.drag-over-below,.drag-over-nest')
+    .forEach(el => {
+      el.classList.remove('drag-over-above', 'drag-over-below', 'drag-over-nest');
+      delete el.dataset.dropMode;
+    });
+}
+function wireTaskDrag(article) {
+  const projId = article.dataset.projectId;
+  article.querySelectorAll('.actionables-list > li[data-item-id]').forEach(li => {
+    if (li.dataset.taskDragWired) return;
+    li.dataset.taskDragWired = "1";
+    const handle = li.querySelector('.item-drag-handle');
+    if (handle) {
+      handle.addEventListener('dragstart', (e) => {
+        e.stopPropagation();
+        _taskDrag = { projId, itemId: li.dataset.itemId };
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("application/x-actionable", li.dataset.itemId);
+        try { e.dataTransfer.setDragImage(li.querySelector('.item-row') || li, 16, 12); } catch (_) {}
+        li.classList.add('dragging');
+      });
+      handle.addEventListener('dragend', () => {
+        li.classList.remove('dragging');
+        clearTaskDropIndicators(document);
+        _taskDrag = null;
+      });
+    }
+    li.addEventListener('dragover', (e) => {
+      if (!_taskDrag || _taskDrag.projId !== projId) return;  // same project only
+      if (_taskDrag.itemId === li.dataset.itemId) return;     // not onto itself
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const rect = li.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const mode = y < rect.height * 0.30 ? 'above'
+                 : y > rect.height * 0.70 ? 'below' : 'nest';
+      clearTaskDropIndicators(article);
+      li.classList.add('drag-over-' + mode);
+      li.dataset.dropMode = mode;
+    });
+    li.addEventListener('dragleave', (e) => {
+      if (!li.contains(e.relatedTarget)) {
+        li.classList.remove('drag-over-above', 'drag-over-below', 'drag-over-nest');
+      }
+    });
+    li.addEventListener('drop', (e) => {
+      if (!_taskDrag || _taskDrag.projId !== projId) return;
+      e.preventDefault();
+      const mode = li.dataset.dropMode || 'above';
+      const draggedId = _taskDrag.itemId;
+      const targetId = li.dataset.itemId;
+      clearTaskDropIndicators(article);
+      if (draggedId && targetId && draggedId !== targetId) {
+        freezeToManualSort();  // a manual reorder lands you in (frozen) manual sort
+        dropActionable(projId, draggedId, targetId, mode);
+      }
+    });
   });
 }
 
@@ -5422,6 +5540,18 @@ function reorderLabels(draggedId, targetId) {
   markAllTabsDirty();
   saveState();
   renderTabs();
+}
+
+// One-shot "Tidy": arrange the active project cards by most recent activity,
+// then leave them in manual order so you can still drag them around.
+function tidyProjectsByActivity() {
+  const activeOrder = byRecentActivity(activeProjects());
+  if (!activeOrder.length) return;
+  const archivedRest = state.projects.filter(p => p.archived);
+  state.projects = activeOrder.concat(archivedRest);
+  markAllProjectsDirty();
+  saveState();
+  renderProjects();
 }
 
 function reorderProjects(draggedId, targetId) {
