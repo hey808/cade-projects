@@ -3592,6 +3592,9 @@ function nestActionable(projId, draggedId, newParentId) {
 function setActionableStatus(projId, itemId, status) {
   const p = findProject(projId); if (!p) return;
   const a = findActionable(p, itemId); if (!a) return;
+  // Close the picker now so the upcoming render shows the updated chip instead
+  // of re-opening the dropdown over it (which read as "the status didn't apply").
+  activeStatusPicker = null;
   // Changing status drops to manual (frozen) so the row doesn't jump under an
   // active Status sort — its rank would otherwise change and reorder the list.
   freezeToManualSort();
@@ -4868,7 +4871,13 @@ function renderFilterBar() {
       let val = opt.dataset.filterValue;
       if (val === "__null__") val = null;
       else if (type === "priority") val = parseInt(val);
-      setFilter(type, val);
+      // Picking "Manual" freezes the order currently on screen in place rather
+      // than snapping back to the stored order — same seamless drop as editing.
+      if (type === "sort" && val === "manual") {
+        freezeToManualSort();
+      } else {
+        setFilter(type, val);
+      }
       activeFilterDropdown = null;
       renderFilterBar();
       if (currentView === "home") renderHome();
