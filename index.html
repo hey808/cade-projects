@@ -2694,7 +2694,7 @@ state.filters = state.filters || {};
 // One-time: move existing users' Home default to "all tasks, today first".
 // (New default lives in getCurrentFilters; this updates already-saved state.)
 if (!state.migratedHomeTodayFirst) {
-  state.filters.home = { status: null, today: false, age: null, sort: "today" };
+  state.filters.home = { status: null, today: false, age: null, sort: "manual" };
   state.migratedHomeTodayFirst = true;
 }
 state.keystone = state.keystone || { date: null, text: "", done: false };
@@ -2875,15 +2875,15 @@ function getCurrentFilters() {
   let f = state.filters[currentView];
   if (!f) {
     f = (currentView === "home")
-      ? { status: null, today: false, age: null, sort: "today" } // Home: all tasks, today first
+      ? { status: null, today: false, age: null, sort: "manual" } // Home: all tasks, manual order
       : { status: null, today: false, age: null };
     state.filters[currentView] = f;
   }
   if (f.status === undefined)   f.status = null;
   if (f.today === undefined)    f.today = false;
   if (f.age === undefined)      f.age = null;
-  // "Manual" sort is gone — every view defaults to (and falls back to) Today first.
-  if (f.sort === undefined || f.sort === null) f.sort = "today";
+  // Manual is the default order; views fall back to it when no sort is set.
+  if (f.sort === undefined || f.sort === null) f.sort = "manual";
   // Drop legacy priority — replaced by Today
   delete f.priority;
   // Legacy status "today" no longer exists — clear it
@@ -2933,6 +2933,17 @@ function setFilter(type, value) {
   else if (type === "sort")  f.sort   = value;
   saveState();
 }
+// Adding or editing a task switches the current view to Manual sort so the item
+// (and its project) stays put instead of being reshuffled by an active sort.
+// Manual is also the default, so this is usually a no-op.
+function switchToManualSort() {
+  const f = getCurrentFilters();
+  if (f.sort !== "manual") {
+    f.sort = "manual";
+    saveState();
+    renderFilterBar();
+  }
+}
 
 // ─── Sorting ───────────────────────────────────────────
 // Status order (ascending): in progress → stuck → backburner → no status → done
@@ -2945,17 +2956,15 @@ function actionableAgeMs(a) {
   return new Date(a.updatedAt || a.createdAt || 0).getTime();
 }
 function actionableComparator(sortKey) {
-  if (!sortKey) return null; // manual / drag order
+  if (!sortKey || sortKey === "manual") return null; // manual / stored order
   switch (sortKey) {
     case "age_new":     return (a, b) => actionableAgeMs(b) - actionableAgeMs(a);
     case "age_old":     return (a, b) => actionableAgeMs(a) - actionableAgeMs(b);
     case "status_asc":  return (a, b) => statusRank(a) - statusRank(b);
     case "status_desc": return (a, b) => statusRank(b) - statusRank(a);
-    // Today first, then break ties by status ascending.
-    case "today":       return (a, b) => {
-      const t = (b.today ? 1 : 0) - (a.today ? 1 : 0);
-      return t !== 0 ? t : statusRank(a) - statusRank(b);
-    };
+    // Purely Today first — everything flagged Today floats up, and within each
+    // group the existing (manual) order is preserved (Array.sort is stable).
+    case "today":       return (a, b) => (b.today ? 1 : 0) - (a.today ? 1 : 0);
     default: return null;
   }
 }
@@ -3073,7 +3082,9 @@ function projectsInCurrentView() {
   if (currentView === "all")               list = activeProjects();
   else if (currentView === "uncategorized") list = activeProjects().filter(p => !p.labelId);
   else                                      list = activeProjects().filter(p => p.labelId === currentView);
-  return byRecentActivity(list);
+  // Manual sort keeps projects in their stored order so editing a task never
+  // reshuffles the board; any active sort orders them by most recent activity.
+  return (getCurrentFilters().sort === "manual") ? list : byRecentActivity(list);
 }
 
 let activeFilterDropdown = null;
@@ -3165,6 +3176,7 @@ function addActionable(projId, text, opts) {
   };
   p.actionables.push(a);
   markActionDirty(a.id);
+  switchToManualSort();
   saveState(); renderProjects();
   setTimeout(() => {
     // After an inline add, keep focus on the add box for rapid entry;
@@ -3206,6 +3218,7 @@ function addSubActionable(projId, parentId) {
   p.actionables.splice(insertAt + 1, 0, a);
   // Positions shifted for everything after the insert — re-sync them all.
   p.actionables.forEach(x => markActionDirty(x.id));
+  switchToManualSort();
   saveState(); renderProjects();
   setTimeout(() => {
     const li = document.querySelector('[data-project-id="' + projId + '"] li[data-item-id="' + a.id + '"]');
@@ -3216,6 +3229,7 @@ function addSubActionable(projId, parentId) {
 function updateActionable(projId, itemId, field, value) {
   const p = findProject(projId); if (!p) return;
   const it = findActionable(p, itemId); if (!it) return;
+  switchToManualSort(); // editing a task shouldn't reshuffle the list
   if (field === "done") {
     const now = new Date().toISOString();
     if (value && !it.done) it.doneAt = now;
@@ -3248,6 +3262,13 @@ function toggleTodayFlag(projId, itemId) {
   a.today = !a.today;
   touchActionable(a);
   markActionDirty(itemId);
+  // Cascade to descendants: marking a parent Today marks all its subtasks Today
+  // too (and clearing it clears them) — mirrors the checkbox cascade.
+  getDescendants(p, a).forEach(d => {
+    d.today = a.today;
+    touchActionable(d);
+    markActionDirty(d.id);
+  });
   saveState();
   renderAll();
 }
@@ -4731,6 +4752,7 @@ function renderFilterBar() {
     { value: "stale",  label: "14+ days",     color: "#dc2626" }
   ];
   const sortOpts = [
+    { value: "manual",      label: "Manual" },
     { value: "today",       label: "Today first" },
     { value: "age_new",     label: "Newest first" },
     { value: "age_old",     label: "Oldest first" },
@@ -5501,23 +5523,38 @@ function renderHome() {
   // filter is on.) Manual (no sort) keeps the grouped view.
   const cmp = actionableComparator(filters.sort);
   if (cmp) {
-    const flat = [];
+    // Build per-project trees so subtasks render nested under their parents,
+    // then sort the top-level "blocks" globally by the active comparator so the
+    // cross-project ordering (e.g. Today first) still holds. Each block is one
+    // root task plus its visible descendants, kept contiguous and indented.
+    const blocks = [];
     activeProjects().forEach(p => {
-      p.actionables.forEach(a => {
-        if (a.archived || !ok(a)) return;
-        if (currentFocusId && a.id === currentFocusId) return; // shown in the focus section
-        flat.push({ project: p, item: a });
+      let items = p.actionables.filter(a => !a.archived && ok(a));
+      if (!items.length) return;
+      items = withAncestors(p, items).filter(a => !a.archived);
+      const tree = buildActionableTree(p, items, cmp);
+      let cur = null;
+      tree.forEach(n => {
+        if (n.depth === 0) {
+          cur = { project: p, root: n.item, nodes: [] };
+          blocks.push(cur);
+        }
+        if (cur) cur.nodes.push(n);
       });
     });
-    if (flat.length === 0 && !focus) {
+    if (blocks.length === 0 && !focus) {
       container.innerHTML = '<div class="empty-state">' + emptyMsg() + '</div>';
       return;
     }
-    flat.sort((x, y) => cmp(x.item, y.item));
-    const listHtml = flat.length
-      ? '<div class="today-group"><div class="today-list">' +
-          flat.map(e => renderHomeItem(e.project, e.item, 0)).join("") +
-        '</div></div>'
+    blocks.sort((x, y) => cmp(x.root, y.root));
+    const rowsHtml = blocks.map(b =>
+      b.nodes
+        .filter(n => !(currentFocusId && n.item.id === currentFocusId)) // shown in the focus section
+        .map(n => renderHomeItem(b.project, n.item, n.depth))
+        .join("")
+    ).join("");
+    const listHtml = rowsHtml
+      ? '<div class="today-group"><div class="today-list">' + rowsHtml + '</div></div>'
       : "";
     container.innerHTML = focusSection + listHtml;
     wireHomeView();
