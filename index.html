@@ -1834,6 +1834,67 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
 .status-picker .picker-divider { height: 1px; background: var(--border); margin: 4px 0; }
 .status-picker .picker-option.clear { color: var(--text-3); font-style: italic; }
 
+/* Row "More" menu */
+.row-more-wrap { position: relative; display: inline-flex; flex-shrink: 0; }
+.row-more-menu {
+  position: absolute; top: 100%; right: 0; margin-top: 4px;
+  background: var(--card); border: 1px solid var(--border-strong);
+  border-radius: 8px; padding: 4px; min-width: 200px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 200;
+}
+.actionables-list > li:has(.row-more-menu) { z-index: 100; position: relative; }
+.project:has(.row-more-menu) { z-index: 100; }
+.row-more-menu .more-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 7px 9px; border-radius: 6px; cursor: pointer;
+  background: none; border: none; font-family: inherit; font-size: 12px;
+  color: var(--text-2); text-align: left; text-decoration: none;
+}
+.row-more-menu .more-item:hover { background: var(--card-hover); color: var(--text); }
+.row-more-menu .more-item svg { width: 15px; height: 15px; stroke: currentColor; flex-shrink: 0; }
+.row-more-menu .more-item.active { color: var(--accent); }
+.recur-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 700; color: var(--accent);
+  background: rgba(255,107,71,0.12); border: 1px solid var(--accent);
+  height: 22px; padding: 0 8px; border-radius: 8px; white-space: nowrap; flex-shrink: 0;
+}
+
+/* Generic modal + recurring popup */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 20px;
+}
+.modal-card {
+  background: var(--card); border: 1px solid var(--border-strong);
+  border-radius: 14px; padding: 22px; width: 100%; max-width: 380px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+}
+.recur-card .recur-title { font-size: 17px; font-weight: 600; color: var(--text); }
+.recur-card .recur-sub { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+.recur-card .recur-note { font-size: 12px; color: var(--text-3); margin: 10px 0 14px; line-height: 1.4; }
+.recur-options { display: flex; flex-direction: column; gap: 8px; }
+.recur-option {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 9px; padding: 11px 13px; cursor: pointer;
+  font-family: inherit; text-align: left;
+}
+.recur-option:hover { border-color: var(--border-strong); }
+.recur-option.selected { border-color: var(--accent); background: rgba(255,107,71,0.08); }
+.recur-opt-text { display: flex; flex-direction: column; flex: 1; }
+.recur-opt-label { font-size: 14px; font-weight: 600; color: var(--text); }
+.recur-opt-sub { font-size: 11px; color: var(--text-3); }
+.recur-check { color: var(--accent); font-weight: 700; }
+.recur-off {
+  width: 100%; margin-top: 12px; background: none; border: 1px solid var(--border);
+  color: var(--text-3); font-family: inherit; font-size: 12px; font-weight: 600;
+  padding: 9px; border-radius: 8px; cursor: pointer;
+}
+.recur-off:hover { border-color: var(--bad); color: var(--bad); }
+.recur-foot { display: flex; justify-content: flex-end; margin-top: 16px; }
+
 ul.items .li-rm {
   background: none; border: none; color: var(--text-4); cursor: pointer;
   font-size: 16px; line-height: 1; padding: 0 4px;
@@ -1856,7 +1917,7 @@ ul.items .li-rm:hover { color: var(--bad); }
 ul.items li:hover .row-tool { opacity: 1; }
 .row-tool:hover { color: var(--text); background: var(--card-hover); }
 .row-tool.has-content { opacity: 1; color: var(--text-2); }
-.row-tool.expanded { color: var(--accent); }
+.row-tool.expanded { color: var(--accent); opacity: 1; }
 .row-tool svg { width: 13px; height: 13px; stroke: currentColor; }
 
 /* Notes panel (collapsible body under the row) */
@@ -2007,7 +2068,7 @@ ul.items li:hover .row-tool { opacity: 1; }
   background: var(--card-hover);
   font-weight: 600; cursor: pointer; white-space: nowrap;
 }
-.today-item .proj-tag:hover { background: #2a2a30; color: var(--text); }
+.today-item .proj-tag:hover { background: var(--border-strong); color: var(--text); }
 
 /* The "one thing" focus star + chosen-task treatment */
 .focus-star {
@@ -2543,6 +2604,8 @@ ul.items li:hover .row-tool { opacity: 1; }
 </div>
 </main>
 
+<div id="recurring-modal-root"></div>
+
 <!-- Collapsible right-side history panel: previous-day journal entries + completed tasks -->
 <button class="history-toggle" id="history-toggle" title="Open history">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2706,6 +2769,8 @@ state.projects.forEach(p => {
     if (typeof a.archived !== "boolean") a.archived = false;
     if (a.archivedAt === undefined) a.archivedAt = null;
     if (typeof a.focus !== "boolean") a.focus = false;
+    if (a.recurring === undefined) a.recurring = null; // 'daily' | 'weekly' | 'monthly' | null
+    if (a.recurNext === undefined) a.recurNext = null; // YYYY-MM-DD the task should reappear
     // Migrate legacy status "today" → "in_progress" + today=true flag
     if (a.status === "today") {
       a.status = "in_progress";
@@ -2729,6 +2794,8 @@ let currentView = (window.localStorage.getItem("view") || "home");
 if (currentView === "today") currentView = "home"; // legacy → renamed view
 window.localStorage.setItem("view", currentView);
 let activeStatusPicker = null; // "<projId>:<itemId>" or null
+let activeMoreMenu = null;     // "<projId>:<itemId>" or null — open row "More" menu
+let recurringEditor = null;    // { projId, itemId } when the recurring popup is open
 let searchTerm = "";
 let expandedDone = new Set();
 let expandedNotes = new Set(); // actionable IDs whose notes panel is open
@@ -2838,10 +2905,11 @@ function setFilter(type, value) {
 }
 
 // ─── Sorting ───────────────────────────────────────────
-// Status order (ascending): in progress → stuck → backburner → no status
-function statusRank(s) {
+// Status order (ascending): in progress → stuck → backburner → no status → done
+function statusRank(a) {
+  if (a.done) return 4;
   const order = { in_progress: 0, stuck: 1, backburner: 2 };
-  return (s && order[s] !== undefined) ? order[s] : 3;
+  return (a.status && order[a.status] !== undefined) ? order[a.status] : 3;
 }
 function actionableAgeMs(a) {
   return new Date(a.updatedAt || a.createdAt || 0).getTime();
@@ -2851,9 +2919,13 @@ function actionableComparator(sortKey) {
   switch (sortKey) {
     case "age_new":     return (a, b) => actionableAgeMs(b) - actionableAgeMs(a);
     case "age_old":     return (a, b) => actionableAgeMs(a) - actionableAgeMs(b);
-    case "status_asc":  return (a, b) => statusRank(a.status) - statusRank(b.status);
-    case "status_desc": return (a, b) => statusRank(b.status) - statusRank(a.status);
-    case "today":       return (a, b) => (b.today ? 1 : 0) - (a.today ? 1 : 0);
+    case "status_asc":  return (a, b) => statusRank(a) - statusRank(b);
+    case "status_desc": return (a, b) => statusRank(b) - statusRank(a);
+    // Today first, then break ties by status ascending.
+    case "today":       return (a, b) => {
+      const t = (b.today ? 1 : 0) - (a.today ? 1 : 0);
+      return t !== 0 ? t : statusRank(a) - statusRank(b);
+    };
     default: return null;
   }
 }
@@ -3057,7 +3129,8 @@ function addActionable(projId, text, opts) {
     priority: 0, stuckSince: null, doneAt: null,
     parentId: null, notes: "",
     archived: false, archivedAt: null,
-    today: false, focus: false
+    today: false, focus: false,
+    recurring: null, recurNext: null
   };
   p.actionables.push(a);
   markActionDirty(a.id);
@@ -3089,7 +3162,8 @@ function addSubActionable(projId, parentId) {
     priority: 0, stuckSince: null, doneAt: null,
     parentId: parentId, notes: "",
     archived: false, archivedAt: null,
-    today: false, focus: false
+    today: false, focus: false,
+    recurring: null, recurNext: null
   };
   // Insert just after the parent's existing subtree so it lands inside it.
   const descIds = new Set(getDescendants(p, parent).map(d => d.id));
@@ -3116,6 +3190,7 @@ function updateActionable(projId, itemId, field, value) {
     if (!value) it.doneAt = null;
     it.done = value;
     if (value && it.focus) it.focus = false; // completing your one thing releases it
+    if (it.recurring) it.recurNext = value ? computeRecurNext(it.recurring, todayDateString()) : null;
     touchActionable(it);
     markActionDirty(itemId);
     // Cascade to descendants: checking parent checks all subs (and unchecking
@@ -3176,6 +3251,99 @@ function clearFocusTask() {
   clearAllFocus();
   saveState();
   renderAll();
+}
+
+// ─── Recurring tasks ────────────────────────────────────
+// A recurring task repeats: when completed it's scheduled for its next due day
+// (recurNext); reactivateRecurring un-completes it and re-flags Today when due.
+function computeRecurNext(freq, fromStr) {
+  const d = fromStr ? new Date(fromStr + "T00:00:00") : new Date();
+  if (freq === "daily")        d.setDate(d.getDate() + 1);
+  else if (freq === "weekly")  d.setDate(d.getDate() + 7);
+  else if (freq === "monthly") d.setMonth(d.getMonth() + 1);
+  else return null;
+  return dateStrOf(d);
+}
+function setRecurring(projId, itemId, freq) {
+  const p = findProject(projId); if (!p) return;
+  const a = findActionable(p, itemId); if (!a) return;
+  a.recurring = freq || null; // falsy turns recurrence off
+  if (a.recurring && a.done) a.recurNext = computeRecurNext(a.recurring, todayDateString());
+  if (!a.recurring) a.recurNext = null;
+  touchActionable(a);
+  markActionDirty(a.id);
+  saveState();
+  renderAll();
+}
+function reactivateRecurring() {
+  const today = todayDateString();
+  let changed = false;
+  state.projects.forEach(p => {
+    if (p.archived) return;
+    p.actionables.forEach(a => {
+      if (!a.recurring || a.archived) return;
+      if (a.done && a.recurNext && a.recurNext <= today) {
+        a.done = false;
+        a.doneAt = null;
+        a.today = true;       // bring it back onto today's list
+        a.recurNext = null;
+        touchActionable(a);
+        markActionDirty(a.id);
+        changed = true;
+      }
+    });
+  });
+  if (changed) saveState();
+  return changed;
+}
+function renderRecurringModal() {
+  const root = document.getElementById("recurring-modal-root");
+  if (!root) return;
+  if (!recurringEditor) { root.innerHTML = ""; return; }
+  const p = findProject(recurringEditor.projId);
+  const a = p && findActionable(p, recurringEditor.itemId);
+  if (!a) { recurringEditor = null; root.innerHTML = ""; return; }
+
+  const opts = [
+    { v: "daily",   label: "Daily",   sub: "Comes back the next day" },
+    { v: "weekly",  label: "Weekly",  sub: "Comes back in 7 days" },
+    { v: "monthly", label: "Monthly", sub: "Comes back next month" }
+  ];
+  const rows = opts.map(o =>
+    '<button class="recur-option' + (a.recurring === o.v ? " selected" : "") + '" data-recur="' + o.v + '">' +
+      '<span class="recur-opt-text"><span class="recur-opt-label">' + o.label + '</span>' +
+      '<span class="recur-opt-sub">' + o.sub + '</span></span>' +
+      (a.recurring === o.v ? '<span class="recur-check">✓</span>' : '') +
+    '</button>'
+  ).join("");
+  const offBtn = a.recurring
+    ? '<button class="recur-off" data-recur="">Turn off repeating</button>'
+    : "";
+
+  root.innerHTML =
+    '<div class="modal-overlay" id="recur-overlay">' +
+      '<div class="modal-card recur-card">' +
+        '<div class="recur-title">Repeat this task</div>' +
+        '<div class="recur-sub">' + escapeAttr(a.text || "(untitled)") + '</div>' +
+        '<div class="recur-note">When you check it off, it reappears on its next day, re-flagged Today.</div>' +
+        '<div class="recur-options">' + rows + '</div>' +
+        offBtn +
+        '<div class="recur-foot"><button class="btn accent" id="recur-done">Done</button></div>' +
+      '</div>' +
+    '</div>';
+
+  root.querySelectorAll('[data-recur]').forEach(btn => {
+    btn.addEventListener("click", () => {
+      setRecurring(recurringEditor.projId, recurringEditor.itemId, btn.dataset.recur || null);
+      // setRecurring → renderAll → renderRecurringModal refreshes the selection
+    });
+  });
+  const overlay = document.getElementById("recur-overlay");
+  if (overlay) overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) { recurringEditor = null; renderRecurringModal(); }
+  });
+  const doneBtn = document.getElementById("recur-done");
+  if (doneBtn) doneBtn.addEventListener("click", () => { recurringEditor = null; renderRecurringModal(); });
 }
 function archiveActionable(projId, itemId) {
   const p = findProject(projId); if (!p) return;
@@ -4243,6 +4411,9 @@ function triggerWindDown(manual) {
     p.actionables.forEach(a => {
       if (a.archived) return;
       if (a.done) {
+        // A recurring task that's awaiting its next occurrence shouldn't be
+        // archived — it needs to stay around to reappear.
+        if (a.recurring && a.recurNext) return;
         // Completed tasks get archived at wind-down
         a.archived = true;
         a.archivedAt = nowIso;
@@ -4304,6 +4475,8 @@ function renderHeroCompact() {
 }
 
 function tickWindDown() {
+  // Recurring tasks that have come due reappear (re-flagged Today).
+  if (reactivateRecurring()) renderAll();
   // Deep Work mode wins — drive its countdown and fire the chime on zero.
   if (state.deepWork && state.deepWork.active) {
     if (deepWorkRemainingMs() <= 0) {
@@ -4712,18 +4885,8 @@ function renderActionable(p, a, depth) {
       '</div>';
   }
 
-  // Google Calendar prefill — opens calendar.google.com with a templated event
+  // Google Calendar prefill URL — used inside the More menu
   const gcalHref = gcalUrl(a);
-  const gcalBtn =
-    '<a class="row-tool" href="' + escapeAttr(gcalHref) + '" target="_blank" rel="noopener" ' +
-      'data-action="open-gcal" title="Add to Google Calendar">' +
-      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-        '<rect x="3" y="4" width="18" height="18" rx="2"/>' +
-        '<line x1="16" y1="2" x2="16" y2="6"/>' +
-        '<line x1="8" y1="2" x2="8" y2="6"/>' +
-        '<line x1="3" y1="10" x2="21" y2="10"/>' +
-      '</svg>' +
-    '</a>';
 
   // Archive button — box-with-arrow icon, hover-revealed like the X
   const archiveBtn =
@@ -4746,19 +4909,43 @@ function renderActionable(p, a, depth) {
       '</button>'
     : "";
 
-  // Notes toggle — chevron caret. Highlights when notes exist or panel is open.
   const notesOpen = expandedNotes.has(a.id);
-  const hasNotes = !!(a.notes && a.notes.trim().length);
-  const notesClass = "row-tool" + (notesOpen ? " expanded" : (hasNotes ? " has-content" : ""));
-  const notesBtn =
-    '<button class="' + notesClass + '" data-action="toggle-notes" ' +
-      'title="' + (hasNotes ? "Notes" : "Add notes") + '">' +
-      '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-        '<line x1="4" y1="7" x2="20" y2="7"/>' +
-        '<line x1="4" y1="12" x2="20" y2="12"/>' +
-        '<line x1="4" y1="17" x2="14" y2="17"/>' +
-      '</svg>' +
-    '</button>';
+  const hasNotes  = !!(a.notes && a.notes.trim().length);
+  const recurCap  = a.recurring ? a.recurring.charAt(0).toUpperCase() + a.recurring.slice(1) : "";
+
+  // Recurring indicator shown inline on the row when a cadence is set
+  const recurBadge = a.recurring
+    ? '<span class="recur-badge" title="Repeats ' + a.recurring + '">↻ ' + recurCap + '</span>'
+    : "";
+
+  // "More" menu — folds Calendar, Notes, and Recurring behind a ⋮ button.
+  const moreKey  = p.id + ":" + a.id;
+  const moreOpen = activeMoreMenu === moreKey;
+  const moreBtn =
+    '<div class="row-more-wrap">' +
+      '<button class="row-tool' + (moreOpen ? " expanded" : (a.recurring || hasNotes ? " has-content" : "")) + '" ' +
+        'data-action="open-more" title="More">' +
+        '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none">' +
+          '<circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/>' +
+        '</svg>' +
+      '</button>' +
+      (moreOpen
+        ? '<div class="row-more-menu">' +
+            '<a class="more-item" href="' + escapeAttr(gcalHref) + '" target="_blank" rel="noopener" data-action="open-gcal">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>' +
+              '</svg><span>Add to Google Calendar</span></a>' +
+            '<button class="more-item" data-action="toggle-notes">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/>' +
+              '</svg><span>' + (hasNotes ? "Notes" : "Add notes") + '</span></button>' +
+            '<button class="more-item' + (a.recurring ? " active" : "") + '" data-action="open-recurring">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>' +
+              '</svg><span>' + (a.recurring ? "Recurring · " + recurCap : "Make recurring") + '</span></button>' +
+          '</div>'
+        : "") +
+    '</div>';
 
   const notesPanel = notesOpen
     ? '<div class="notes-panel">' +
@@ -4780,13 +4967,13 @@ function renderActionable(p, a, depth) {
         '<input type="text" class="item-text" data-action="update-actionable" ' +
           'placeholder="What needs to be done?" value="' + escapeAttr(a.text) + '">' +
         ageBadge +
+        recurBadge +
         todayBtn +
         '<div class="status-wrap">' +
           renderStatusChip(p, a) +
           renderStatusPicker(p, a) +
         '</div>' +
-        gcalBtn +
-        notesBtn +
+        moreBtn +
         archiveBtn +
       '</div>' +
       contextRow +
@@ -4849,9 +5036,21 @@ function wireProjects() {
         activeStatusPicker = null;
         // setActionableStatus calls renderAll
       }
+      else if (action === "open-more") {
+        const key = projId + ":" + itemId;
+        activeMoreMenu = activeMoreMenu === key ? null : key;
+        renderProjects();
+      }
+      else if (action === "open-recurring") {
+        recurringEditor = { projId: projId, itemId: itemId };
+        activeMoreMenu = null;
+        renderProjects();
+        renderRecurringModal();
+      }
       else if (action === "toggle-notes") {
         if (expandedNotes.has(itemId)) expandedNotes.delete(itemId);
         else expandedNotes.add(itemId);
+        activeMoreMenu = null; // chose an item — close the More menu
         renderProjects();
         // Auto-focus the textarea when newly opened
         if (expandedNotes.has(itemId)) {
@@ -4861,7 +5060,8 @@ function wireProjects() {
           }, 0);
         }
       }
-      // open-gcal: anchor tag opens the URL natively; nothing to do here.
+      // open-gcal: anchor tag opens the URL natively in a new tab; the menu
+      // closes on the next render / outside click.
     });
   });
 
@@ -4954,6 +5154,10 @@ document.addEventListener("click", (e) => {
     activeStatusPicker = null;
     if (currentView === "home") renderHome();
     else renderProjects();
+  }
+  if (activeMoreMenu && !e.target.closest('.row-more-wrap')) {
+    activeMoreMenu = null;
+    renderProjects();
   }
   if (activeTabEditor && !e.target.closest('.tab-edit-popover') && !e.target.closest('[data-tab-edit]') && !e.target.closest('#tab-add')) {
     activeTabEditor = null;
@@ -6175,6 +6379,7 @@ function renderAll() {
   else if (currentView === "archive") renderArchive();
   else if (currentView === "home")    renderHome();
   else                                 renderProjects();
+  renderRecurringModal();
 }
 
 // ─── Export / Import ──────────────────────────────────
@@ -6220,6 +6425,8 @@ function importDataFromFile(file) {
           if (a.stuckSince === undefined) a.stuckSince = a.status === "stuck" ? NOW : null;
           if (a.doneAt === undefined) a.doneAt = a.done ? NOW : null;
           if (typeof a.focus !== "boolean") a.focus = false;
+          if (a.recurring === undefined) a.recurring = null;
+          if (a.recurNext === undefined) a.recurNext = null;
           delete a.labels;
           delete a.dueDate;
         });
@@ -6385,6 +6592,8 @@ async function loadStateFromCloud() {
       archivedAt: a.archived_at || null,
       today: todayFlag,
       focus: !!a.focus,
+      recurring: a.recurring || null,
+      recurNext: a.recur_next || null,
       createdAt: a.created_at, updatedAt: a.updated_at, doneAt: a.done_at, stuckSince: a.stuck_since,
       labels: []
     });
@@ -6502,6 +6711,8 @@ async function flushDirty() {
       archived_at: a.archivedAt || null,
       today: !!a.today,
       focus: !!a.focus,
+      recurring: a.recurring || null,
+      recur_next: a.recurNext || null,
       position: loc.position,
       updated_at: a.updatedAt || new Date().toISOString(),
       done_at: a.doneAt || null, stuck_since: a.stuckSince || null
@@ -6636,6 +6847,7 @@ async function initAfterAuth() {
   await ensureProfile();
   await maybeMigrateLocalStorage();
   await loadStateFromCloud();
+  reactivateRecurring(); // bring back any recurring tasks now due
   document.getElementById('signed-in').style.display = '';
   const emailEl = document.getElementById('signed-in-email');
   if (emailEl) emailEl.textContent = (currentUser && currentUser.email) || '';
