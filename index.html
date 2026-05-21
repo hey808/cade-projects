@@ -1821,6 +1821,11 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
    so the dropdown can extend over the next project card below it. */
 .project:has(.status-picker) { z-index: 100; }
 .actionables-list > li:has(.status-picker) { z-index: 100; position: relative; }
+/* While the picker is open, keep its wrapper fully opaque. On "not today" rows
+   .status-wrap is dimmed to 0.7, which both fades the open dropdown (so it looks
+   like it's behind the card below) and creates an opacity stacking context that
+   can trap the picker. Reset it so the dropdown reads as a solid, on-top layer. */
+.actionables-list > li.not-today:has(.status-picker) .status-wrap { opacity: 1; }
 .status-picker .picker-option {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 8px; border-radius: 5px;
@@ -2933,16 +2938,41 @@ function setFilter(type, value) {
   else if (type === "sort")  f.sort   = value;
   saveState();
 }
-// Adding or editing a task switches the current view to Manual sort so the item
+// Adding or editing a task drops the current view to Manual sort so the item
 // (and its project) stays put instead of being reshuffled by an active sort.
-// Manual is also the default, so this is usually a no-op.
-function switchToManualSort() {
+// An active sort only changes how things are *displayed* — the stored order is
+// the manual order — so naively flipping to manual would snap everything back
+// to the stored order and cause a visible jump. To avoid that we first "freeze"
+// the order currently on screen into the stored order, THEN clear the sort.
+// Result: dropping to manual is seamless and nothing moves.
+function freezeToManualSort() {
   const f = getCurrentFilters();
-  if (f.sort !== "manual") {
-    f.sort = "manual";
-    saveState();
-    renderFilterBar();
+  if (f.sort === "manual") return; // already manual — nothing to freeze
+  const cmp = actionableComparator(f.sort);
+  if (cmp) {
+    // 1. Freeze each project's item order. buildActionableTree linearizes the
+    //    tree (parents before children, subtrees contiguous) in the comparator's
+    //    sibling order — a valid manual ordering that matches what's rendered.
+    state.projects.forEach(p => {
+      const ordered = buildActionableTree(p, p.actionables, cmp).map(n => n.item);
+      if (ordered.length === p.actionables.length) {
+        p.actionables = ordered;
+        p.actionables.forEach(a => markActionDirty(a.id)); // persist new positions
+      }
+    });
+    // 2. Freeze the project-card order. Any active sort lists cards by recent
+    //    activity; manual uses the stored order, so bake the activity order in
+    //    too or the cards themselves would jump.
+    const activeOrder = byRecentActivity(activeProjects());
+    if (activeOrder.length) {
+      const archivedRest = state.projects.filter(p => p.archived);
+      state.projects = activeOrder.concat(archivedRest);
+      markAllProjectsDirty();
+    }
   }
+  f.sort = "manual";
+  saveState();
+  renderFilterBar();
 }
 
 // ─── Sorting ───────────────────────────────────────────
@@ -3174,9 +3204,11 @@ function addActionable(projId, text, opts) {
     recurring: null, recurNext: null,
     recurTime: null, recurDow: null, recurDom: null
   };
+  // Freeze any active sort to manual BEFORE appending so the existing rows
+  // don't reshuffle and the new task lands where it was added (at the end).
+  freezeToManualSort();
   p.actionables.push(a);
   markActionDirty(a.id);
-  switchToManualSort();
   saveState(); renderProjects();
   setTimeout(() => {
     // After an inline add, keep focus on the add box for rapid entry;
@@ -3196,6 +3228,9 @@ function addSubActionable(projId, parentId) {
   const p = findProject(projId); if (!p) return;
   const parent = findActionable(p, parentId); if (!parent) return;
   if (getDepth(p, parent) >= MAX_DEPTH) return; // respect the nesting cap
+  // Freeze any active sort before computing the insert point, so the new
+  // subtask lands under its parent and nothing else reshuffles.
+  freezeToManualSort();
   const now = new Date().toISOString();
   const a = {
     id: uid(), text: "", done: false,
@@ -3218,7 +3253,6 @@ function addSubActionable(projId, parentId) {
   p.actionables.splice(insertAt + 1, 0, a);
   // Positions shifted for everything after the insert — re-sync them all.
   p.actionables.forEach(x => markActionDirty(x.id));
-  switchToManualSort();
   saveState(); renderProjects();
   setTimeout(() => {
     const li = document.querySelector('[data-project-id="' + projId + '"] li[data-item-id="' + a.id + '"]');
@@ -3229,7 +3263,7 @@ function addSubActionable(projId, parentId) {
 function updateActionable(projId, itemId, field, value) {
   const p = findProject(projId); if (!p) return;
   const it = findActionable(p, itemId); if (!it) return;
-  switchToManualSort(); // editing a task shouldn't reshuffle the list
+  freezeToManualSort(); // editing drops to manual without reshuffling the list
   if (field === "done") {
     const now = new Date().toISOString();
     if (value && !it.done) it.doneAt = now;
@@ -3259,6 +3293,9 @@ function updateActionable(projId, itemId, field, value) {
 function toggleTodayFlag(projId, itemId) {
   const p = findProject(projId); if (!p) return;
   const a = findActionable(p, itemId); if (!a) return;
+  // Toggling Today drops to manual (frozen) so the row doesn't jump — e.g. under
+  // a "Today first" sort, flipping the flag would otherwise reorder the list.
+  freezeToManualSort();
   a.today = !a.today;
   touchActionable(a);
   markActionDirty(itemId);
@@ -3555,6 +3592,9 @@ function nestActionable(projId, draggedId, newParentId) {
 function setActionableStatus(projId, itemId, status) {
   const p = findProject(projId); if (!p) return;
   const a = findActionable(p, itemId); if (!a) return;
+  // Changing status drops to manual (frozen) so the row doesn't jump under an
+  // active Status sort — its rank would otherwise change and reorder the list.
+  freezeToManualSort();
   const prevStatus = a.status;
   a.status = STATUSES.includes(status) ? status : null;
   if (a.status === "stuck" && prevStatus !== "stuck") a.stuckSince = new Date().toISOString();
