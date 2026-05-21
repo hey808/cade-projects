@@ -2155,6 +2155,30 @@ ul.items li:hover .row-tool { opacity: 1; }
   background: var(--card); border: 1px solid var(--border);
   border-radius: 8px; padding: 12px 14px;
 }
+.archive-row.selected { border-color: var(--accent); }
+.archive-select {
+  width: 16px; height: 16px; flex-shrink: 0; cursor: pointer;
+  accent-color: var(--accent);
+}
+/* Bulk action bar — appears under the header while rows are selected */
+.archive-bulk {
+  display: flex; align-items: center; gap: 8px; margin-top: 14px;
+  padding: 10px 12px; background: var(--card);
+  border: 1px solid var(--border-strong); border-radius: 8px;
+}
+.archive-bulk .count { color: var(--text-2); font-size: 13px; font-weight: 600; margin-right: auto; }
+.archive-bulk button {
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  height: 30px; padding: 0 12px; border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid var(--border-strong); color: var(--text-2);
+}
+.archive-bulk button:hover { color: var(--text); border-color: var(--text-3); }
+.archive-bulk button.bulk-danger:hover { color: var(--bad); border-color: var(--bad); }
+.archive-toolbar-link {
+  background: none; border: none; color: var(--text-3); cursor: pointer;
+  font-family: inherit; font-size: 12px; padding: 0; margin-top: 10px;
+}
+.archive-toolbar-link:hover { color: var(--text); }
 .archive-row:hover { border-color: var(--border-strong); }
 .archive-row-main { flex: 1; min-width: 0; }
 .archive-row-text { font-size: 14px; color: var(--text); }
@@ -3148,17 +3172,60 @@ function deleteProject(id) {
 // view. Reversible; permanent deletion lives only in the Archive.
 function archiveProject(id) {
   const p = findProject(id); if (!p) return;
+  const now = new Date().toISOString();
   p.archived = true;
-  p.archivedAt = new Date().toISOString();
+  p.archivedAt = now;
+  // Archive the project's still-active tasks too, stamped with the SAME time as
+  // the project. This keeps the actionables table self-consistent for analytics
+  // (a task inside an archived project reads archived=true). Tasks the user had
+  // already archived individually keep their own earlier timestamp, so a later
+  // restore leaves them archived.
+  p.actionables.forEach(a => {
+    if (!a.archived) {
+      a.archived = true;
+      a.archivedAt = now;
+      markActionDirty(a.id);
+    }
+  });
   markProjectDirty(id);
   saveState(); renderAll();
 }
 function unarchiveProject(id) {
   const p = findProject(id); if (!p) return;
+  const batchTime = p.archivedAt; // tasks archived as part of THIS project-archive
   p.archived = false;
   p.archivedAt = null;
+  // Restore only the tasks that were archived together with the project (same
+  // timestamp). Anything archived individually beforehand stays archived.
+  p.actionables.forEach(a => {
+    if (a.archived && a.archivedAt === batchTime) {
+      a.archived = false;
+      a.archivedAt = null;
+      markActionDirty(a.id);
+    }
+  });
   markProjectDirty(id);
   saveState(); renderAll();
+}
+// Archived loose tasks are kept as a safety net, then permanently deleted after
+// this many days. Only tasks in ACTIVE projects are purged — tasks belonging to
+// an archived project are tied to that project's lifecycle (they come back if
+// you restore it, and only vanish if you delete the project forever).
+const ARCHIVE_PURGE_DAYS = 7;
+function purgeOldArchivedTasks() {
+  const cutoff = Date.now() - ARCHIVE_PURGE_DAYS * 86400000;
+  let removed = 0;
+  activeProjects().forEach(p => {
+    const stale = p.actionables.filter(a =>
+      a.archived && a.archivedAt && new Date(a.archivedAt).getTime() < cutoff);
+    if (!stale.length) return;
+    const ids = new Set(stale.map(a => a.id));
+    p.actionables = p.actionables.filter(a => !ids.has(a.id));
+    ids.forEach(id => markActionDeleted(id));
+    removed += ids.size;
+  });
+  if (removed > 0) saveState();
+  return removed;
 }
 function deleteProjectForever(id) {
   const p = findProject(id); if (!p) return;
@@ -3256,8 +3323,9 @@ function addSubActionable(projId, parentId) {
 function updateActionable(projId, itemId, field, value) {
   const p = findProject(projId); if (!p) return;
   const it = findActionable(p, itemId); if (!it) return;
-  freezeToManualSort(); // editing drops to manual without reshuffling the list
   if (field === "done") {
+    // Completing a task does NOT drop to manual — let any active sort re-order it
+    // naturally (e.g. a finished task settling to the bottom of a status sort).
     const now = new Date().toISOString();
     if (value && !it.done) it.doneAt = now;
     if (!value) it.doneAt = null;
@@ -3278,6 +3346,7 @@ function updateActionable(projId, itemId, field, value) {
     saveState();
     return;
   }
+  freezeToManualSort(); // other edits drop to manual without reshuffling the list
   it[field] = value;
   touchActionable(it);
   markActionDirty(itemId);
@@ -5674,14 +5743,6 @@ function renderHome() {
   const ok = (a) => passesAllItemFilters(a);
   const filters = getCurrentFilters();
 
-  // The chosen "one thing" gets its own gold section pinned to the top, shown
-  // regardless of the current filters and excluded from the list below.
-  const focusSection = focus
-    ? '<div class="focus-section">' +
-        '<div class="focus-section-label">★ Your one thing</div>' +
-        renderHomeItem(focus.project, focus.item, 0) +
-      '</div>'
-    : "";
   const filterActive = filters.status !== null || filters.today === true || filters.age !== null;
 
   const emptyMsg = () => {
@@ -5696,49 +5757,10 @@ function renderHome() {
       '<p>Add a project and some actionables to get started.</p>';
   };
 
-  // When a sort is active, Home becomes a single flat list ordered across ALL
-  // projects. (The grouped-by-project view below only reorders within each
-  // group, which masks the sort unless the list is short — e.g. when the Today
-  // filter is on.) Manual (no sort) keeps the grouped view.
+  // Home always groups tasks under their project (project name headers up top),
+  // for every sort. The Sort dropdown reorders tasks WITHIN each project group;
+  // it no longer flattens Home into one cross-project list.
   const cmp = actionableComparator(filters.sort);
-  if (cmp) {
-    // Build per-project trees so subtasks render nested under their parents,
-    // then sort the top-level "blocks" globally by the active comparator so the
-    // cross-project ordering (e.g. Today first) still holds. Each block is one
-    // root task plus its visible descendants, kept contiguous and indented.
-    const blocks = [];
-    activeProjects().forEach(p => {
-      let items = p.actionables.filter(a => !a.archived && ok(a));
-      if (!items.length) return;
-      items = withAncestors(p, items).filter(a => !a.archived);
-      const tree = buildActionableTree(p, items, cmp);
-      let cur = null;
-      tree.forEach(n => {
-        if (n.depth === 0) {
-          cur = { project: p, root: n.item, nodes: [] };
-          blocks.push(cur);
-        }
-        if (cur) cur.nodes.push(n);
-      });
-    });
-    if (blocks.length === 0 && !focus) {
-      container.innerHTML = '<div class="empty-state">' + emptyMsg() + '</div>';
-      return;
-    }
-    blocks.sort((x, y) => cmp(x.root, y.root));
-    const rowsHtml = blocks.map(b =>
-      b.nodes
-        .filter(n => !(currentFocusId && n.item.id === currentFocusId)) // shown in the focus section
-        .map(n => renderHomeItem(b.project, n.item, n.depth))
-        .join("")
-    ).join("");
-    const listHtml = rowsHtml
-      ? '<div class="today-group"><div class="today-list">' + rowsHtml + '</div></div>'
-      : "";
-    container.innerHTML = focusSection + listHtml;
-    wireHomeView();
-    return;
-  }
 
   const groups = [];
   activeProjects().forEach(p => {
@@ -5748,7 +5770,9 @@ function renderHome() {
     // Keep ancestor context so indentation makes sense in the Home list
     items = withAncestors(p, items);
     items = items.filter(a => !a.archived);
-    const tree = buildActionableTree(p, items);
+    // Sort tasks within this project group by the active sort (cmp is null for
+    // Manual, which leaves them in stored order).
+    const tree = buildActionableTree(p, items, cmp);
     groups.push({ project: p, tree });
   });
 
@@ -5878,7 +5902,6 @@ function renderHomeItem(p, a, depth) {
       recurBadge +
       todayBtn +
       '<div class="status-wrap">' + statusChipHtml + statusPickerHtml + '</div>' +
-      '<div class="proj-tag" data-action="jump-to-project">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
       archiveBtn +
       moreBtn +
       contextRow +
@@ -5958,21 +5981,6 @@ function wireHomeView() {
       updateActionable(wrap.dataset.projectId, wrap.dataset.itemId, "waitingFor", inp.value);
     });
     inp.addEventListener("click", (e) => e.stopPropagation());
-  });
-  container.querySelectorAll('[data-action="jump-to-project"]').forEach(tag => {
-    tag.addEventListener("click", () => {
-      const wrap = tag.closest('.today-item');
-      const proj = findProject(wrap.dataset.projectId);
-      // Jump to the tab that actually contains the project
-      const target = proj
-        ? (proj.labelId || (state.labels.length === 0 ? "all" : "uncategorized"))
-        : (state.labels.length === 0 ? "all" : "uncategorized");
-      setView(target);
-      setTimeout(() => {
-        const el = document.querySelector('[data-project-id="' + wrap.dataset.projectId + '"]');
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 0);
-    });
   });
   // More (⋮) menu → toggle open/closed
   container.querySelectorAll('[data-action="open-more"]').forEach(btn => {
@@ -6155,6 +6163,58 @@ document.getElementById("history-back").addEventListener("click", () => {
 
 // ─── Render: Archive ──────────────────────────────────
 // Shows every archived actionable across projects, newest first.
+// ─── Archive bulk selection ────────────────────────────
+// Keys are "proj:<projectId>" or "task:<projectId>:<itemId>".
+let archiveSelection = new Set();
+function archiveBulkRecover() {
+  if (archiveSelection.size === 0) return;
+  archiveSelection.forEach(key => {
+    const parts = key.split(":");
+    if (parts[0] === "proj") {
+      const p = findProject(parts[1]); if (!p) return;
+      const batchTime = p.archivedAt;
+      p.archived = false; p.archivedAt = null;
+      p.actionables.forEach(a => {
+        if (a.archived && a.archivedAt === batchTime) {
+          a.archived = false; a.archivedAt = null; markActionDirty(a.id);
+        }
+      });
+      markProjectDirty(p.id);
+    } else {
+      const p = findProject(parts[1]); if (!p) return;
+      const target = findActionable(p, parts[2]); if (!target) return;
+      const ids = new Set(getDescendants(p, target).map(d => d.id)); ids.add(target.id);
+      p.actionables.forEach(a => {
+        if (ids.has(a.id)) { a.archived = false; a.archivedAt = null; markActionDirty(a.id); }
+      });
+    }
+  });
+  archiveSelection.clear();
+  saveState(); renderAll();
+}
+function archiveBulkDelete() {
+  if (archiveSelection.size === 0) return;
+  const n = archiveSelection.size;
+  if (!confirm("Delete " + n + " selected item" + (n === 1 ? "" : "s") + " forever? This can't be undone.")) return;
+  archiveSelection.forEach(key => {
+    const parts = key.split(":");
+    if (parts[0] === "proj") {
+      const p = findProject(parts[1]); if (!p) return;
+      p.actionables.forEach(a => markActionDeleted(a.id));
+      markProjectDeleted(p.id);
+      state.projects = state.projects.filter(x => x.id !== p.id);
+    } else {
+      const p = findProject(parts[1]); if (!p) return;
+      const target = findActionable(p, parts[2]); if (!target) return;
+      const ids = new Set(getDescendants(p, target).map(d => d.id)); ids.add(target.id);
+      p.actionables = p.actionables.filter(a => !ids.has(a.id));
+      ids.forEach(id => markActionDeleted(id));
+    }
+  });
+  archiveSelection.clear();
+  saveState(); renderAll();
+}
+
 function renderArchive() {
   const container = document.getElementById("archive-container");
   const rows = [];
@@ -6188,7 +6248,10 @@ function renderArchive() {
       ? new Date(p.archivedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
       : "";
     const n = p.actionables.length;
-    return '<div class="archive-row" data-archived-project-id="' + p.id + '">' +
+    const key = "proj:" + p.id;
+    const sel = archiveSelection.has(key);
+    return '<div class="archive-row' + (sel ? " selected" : "") + '" data-archived-project-id="' + p.id + '">' +
+      '<input type="checkbox" class="archive-select" data-sel-key="' + key + '"' + (sel ? " checked" : "") + '>' +
       '<div class="archive-row-main">' +
         '<div class="archive-row-text">' + escapeAttr(p.name || "(untitled project)") + '</div>' +
         '<div class="archive-row-meta">' +
@@ -6207,7 +6270,10 @@ function renderArchive() {
     const when = r.a.archivedAt
       ? new Date(r.a.archivedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })
       : "";
-    return '<div class="archive-row" data-project-id="' + r.p.id + '" data-item-id="' + r.a.id + '">' +
+    const key = "task:" + r.p.id + ":" + r.a.id;
+    const sel = archiveSelection.has(key);
+    return '<div class="archive-row' + (sel ? " selected" : "") + '" data-project-id="' + r.p.id + '" data-item-id="' + r.a.id + '">' +
+      '<input type="checkbox" class="archive-select" data-sel-key="' + key + '"' + (sel ? " checked" : "") + '>' +
       '<div class="archive-row-main">' +
         '<div class="archive-row-text' + (r.a.done ? " done" : "") + '">' +
           escapeAttr(r.a.text || "(untitled)") +
@@ -6230,10 +6296,32 @@ function renderArchive() {
   const restRows = rows.filter(r => !(r.a.archivedAt && dateStrOf(r.a.archivedAt) === y));
 
   const total = rows.length + archivedProjects.length;
+
+  // Keep the selection in sync with what's actually here (drop stale keys), then
+  // build either the bulk-action bar (when something is selected) or a quiet
+  // "Select all" link.
+  const allKeys = archivedProjects.map(p => "proj:" + p.id)
+    .concat(rows.map(r => "task:" + r.p.id + ":" + r.a.id));
+  const allKeySet = new Set(allKeys);
+  Array.from(archiveSelection).forEach(k => { if (!allKeySet.has(k)) archiveSelection.delete(k); });
+  const selCount = archiveSelection.size;
+  let toolbarHtml;
+  if (selCount > 0) {
+    toolbarHtml = '<div class="archive-bulk">' +
+      '<span class="count">' + selCount + ' selected</span>' +
+      '<button data-action="bulk-recover">Recover</button>' +
+      '<button class="bulk-danger" data-action="bulk-delete">Delete forever</button>' +
+      '<button data-action="bulk-clear">Clear</button>' +
+    '</div>';
+  } else {
+    toolbarHtml = '<button class="archive-toolbar-link" data-action="bulk-select-all">Select all</button>';
+  }
+
   let html =
     '<div class="archive-header"><h2>Archive</h2>' +
       '<div class="archive-sub">' + total + ' archived ' +
       (total === 1 ? 'item' : 'items') + '</div>' +
+      toolbarHtml +
     '</div>';
 
   if (archivedProjects.length) {
@@ -6280,6 +6368,27 @@ function wireArchive() {
       deleteProjectForever(row.dataset.archivedProjectId);
     });
   });
+
+  // Selection checkboxes — toggle membership and re-render to refresh the bar.
+  c.querySelectorAll('.archive-select').forEach(cb => {
+    cb.addEventListener("change", () => {
+      const key = cb.dataset.selKey;
+      if (cb.checked) archiveSelection.add(key);
+      else archiveSelection.delete(key);
+      renderArchive();
+    });
+  });
+  const selAll = c.querySelector('[data-action="bulk-select-all"]');
+  if (selAll) selAll.addEventListener("click", () => {
+    c.querySelectorAll('.archive-select').forEach(cb => archiveSelection.add(cb.dataset.selKey));
+    renderArchive();
+  });
+  const clearBtn = c.querySelector('[data-action="bulk-clear"]');
+  if (clearBtn) clearBtn.addEventListener("click", () => { archiveSelection.clear(); renderArchive(); });
+  const recoverBtn = c.querySelector('[data-action="bulk-recover"]');
+  if (recoverBtn) recoverBtn.addEventListener("click", archiveBulkRecover);
+  const delBtn = c.querySelector('[data-action="bulk-delete"]');
+  if (delBtn) delBtn.addEventListener("click", archiveBulkDelete);
 }
 
 // ─── Render: Morning Journal ──────────────────────────
@@ -7303,6 +7412,7 @@ async function initAfterAuth() {
   await maybeMigrateLocalStorage();
   await loadStateFromCloud();
   reactivateRecurring(); // bring back any recurring tasks now due
+  purgeOldArchivedTasks(); // clear out archived tasks older than the retention window
   document.getElementById('signed-in').style.display = '';
   const emailEl = document.getElementById('signed-in-email');
   if (emailEl) emailEl.textContent = (currentUser && currentUser.email) || '';
