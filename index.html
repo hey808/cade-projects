@@ -1828,6 +1828,25 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
 
 /* Status chip + picker */
 .status-wrap { position: relative; flex-shrink: 0; }
+/* Assignee chip + picker (the dropdown reuses .status-picker) */
+.assignee-wrap { position: relative; flex-shrink: 0; }
+.assignee-chip {
+  width: 24px; height: 24px; border-radius: 50%; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--card-hover); border: 1px solid var(--border-strong);
+  color: var(--text-2); font-size: 10px; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+.assignee-chip svg { width: 13px; height: 13px; color: var(--text-4); }
+.assignee-chip:hover { border-color: var(--accent); }
+.assignee-chip.assigned { background: rgba(255,107,71,0.18); color: var(--accent); border-color: var(--accent); }
+.assignee-picker .picker-option { white-space: nowrap; }
+.assignee-dot {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--card-hover); color: var(--text-2); font-size: 9px; font-weight: 700;
+}
+/* Lift a Home row above its neighbours while a picker is open on it */
+.today-item:has(.status-picker) { z-index: 100; position: relative; }
 .status-chip {
   display: inline-flex; align-items: center; gap: 5px;
   height: 22px; padding: 0 10px; border-radius: 8px;
@@ -2765,6 +2784,13 @@ let wsMembersOpen = false;
 let wsMembers = [];                  // [{ user_id, role, email, display_name }]
 let wsInvites = [];                  // [{ id, email, role }]
 let wsMembersMsg = null;             // { text, ok } | null
+// Assignment
+let boardAllow = {};                 // tab_id -> Set(user_id) for restricted boards
+let activeAssignPicker = null;       // "<projId>:<itemId>" or null
+// Realtime
+let realtimeChannel = null;
+let realtimeReloadTimer = null;
+let lastLocalWriteAt = 0;            // suppress reacting to the echo of our own writes
 
 function bootLog(msg) { /* console.log('[slate]', msg); */ }
 
@@ -5333,6 +5359,7 @@ function renderActionable(p, a, depth) {
           renderStatusChip(p, a) +
           renderStatusPicker(p, a) +
         '</div>' +
+        renderAssigneeChip(p, a) +
         archiveBtn +
         moreBtn +
       '</div>' +
@@ -5395,6 +5422,16 @@ function wireProjects() {
         setActionableStatus(projId, itemId, status);
         activeStatusPicker = null;
         // setActionableStatus calls renderAll
+      }
+      else if (action === "open-assignee") {
+        const key = projId + ":" + itemId;
+        activeAssignPicker = activeAssignPicker === key ? null : key;
+        activeStatusPicker = null; activeMoreMenu = null;
+        renderProjects();
+      }
+      else if (action === "set-assignee") {
+        setActionableAssignee(projId, itemId, el.dataset.uid || null);
+        // setActionableAssignee calls renderAll
       }
       else if (action === "open-more") {
         const key = projId + ":" + itemId;
@@ -5516,6 +5553,11 @@ document.addEventListener("click", (e) => {
   }
   if (activeStatusPicker && !e.target.closest('.status-picker') && !e.target.closest('[data-action="open-status-picker"]')) {
     activeStatusPicker = null;
+    if (currentView === "home") renderHome();
+    else renderProjects();
+  }
+  if (activeAssignPicker && !e.target.closest('.assignee-wrap')) {
+    activeAssignPicker = null;
     if (currentView === "home") renderHome();
     else renderProjects();
   }
@@ -5998,6 +6040,7 @@ function renderHomeItem(p, a, depth) {
       recurBadge +
       todayBtn +
       '<div class="status-wrap">' + statusChipHtml + statusPickerHtml + '</div>' +
+      renderAssigneeChip(p, a) +
       archiveBtn +
       moreBtn +
       contextRow +
@@ -6061,6 +6104,25 @@ function wireHomeView() {
       setActionableStatus(wrap.dataset.projectId, wrap.dataset.itemId, status);
       activeStatusPicker = null;
       // setActionableStatus calls renderAll
+    });
+  });
+  // Assignee
+  container.querySelectorAll('[data-action="open-assignee"]').forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wrap = btn.closest('.today-item'); if (!wrap) return;
+      const key = wrap.dataset.projectId + ":" + wrap.dataset.itemId;
+      activeAssignPicker = activeAssignPicker === key ? null : key;
+      activeStatusPicker = null; activeMoreMenu = null;
+      renderHome();
+    });
+  });
+  container.querySelectorAll('[data-action="set-assignee"]').forEach(opt => {
+    opt.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const wrap = opt.closest('.today-item'); if (!wrap) return;
+      setActionableAssignee(wrap.dataset.projectId, wrap.dataset.itemId, opt.dataset.uid || null);
+      // setActionableAssignee calls renderAll
     });
   });
   // Blocker / waiting-for context inputs
@@ -7265,11 +7327,13 @@ async function switchWorkspace(id) {
   localStorage.setItem('workspace', id);
   syncEnabled = false;
   await loadStateFromCloud();
+  await loadAssigneeContext();
   syncEnabled = true;
   currentView = 'home';
   window.localStorage.setItem('view', 'home');
   renderAll();
   renderWorkspaceSwitcher();
+  subscribeRealtime();                  // re-point realtime at the new workspace
 }
 async function createWorkspacePrompt() {
   wsSwitcherOpen = false;
@@ -7476,6 +7540,128 @@ function renderWorkspaceMembersModal() {
   if (lv) lv.addEventListener('click', leaveWorkspace);
 }
 
+// ─── Task assignment ───────────────────────────────────
+// Allow-lists for restricted boards (tab_id -> set of user ids). The owner sees
+// every entry; a non-owner only sees their own row (RLS), which is fine — the DB
+// trigger is the real guard on who can be assigned.
+async function loadBoardAllow() {
+  boardAllow = {};
+  if (!sb) return;
+  const res = await sb.from('tab_members').select('tab_id, user_id');
+  (res.data || []).forEach(r => {
+    (boardAllow[r.tab_id] = boardAllow[r.tab_id] || new Set()).add(r.user_id);
+  });
+}
+// Load the people/allow-list context used by the assignee picker.
+async function loadAssigneeContext() {
+  await Promise.all([refreshWorkspaceMembers(), loadBoardAllow()]);
+}
+
+// ─── Realtime sync ─────────────────────────────────────
+// Subscribe to changes on the active workspace's tables. Any remote change
+// triggers a debounced, safe reload (it waits until we're not mid-edit so a
+// teammate's update never stomps on something you're typing).
+function unsubscribeRealtime() {
+  if (realtimeChannel) { try { sb.removeChannel(realtimeChannel); } catch (_) {} realtimeChannel = null; }
+  if (realtimeReloadTimer) { clearTimeout(realtimeReloadTimer); realtimeReloadTimer = null; }
+}
+function subscribeRealtime() {
+  if (!sb || !currentWorkspaceId) return;
+  unsubscribeRealtime();
+  const flt = 'workspace_id=eq.' + currentWorkspaceId;
+  realtimeChannel = sb.channel('ws-' + currentWorkspaceId)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'projects',    filter: flt }, scheduleRealtimeReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'actionables', filter: flt }, scheduleRealtimeReload)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tabs',        filter: flt }, scheduleRealtimeReload)
+    .subscribe();
+}
+function scheduleRealtimeReload() {
+  if (realtimeReloadTimer) return;
+  realtimeReloadTimer = setTimeout(async () => {
+    realtimeReloadTimer = null;
+    await realtimeReloadIfSafe();
+  }, 900);
+}
+async function realtimeReloadIfSafe() {
+  const pending = dirty.tabs.size || dirty.projects.size || dirty.actionables.size ||
+    dirty.delTabs.size || dirty.delProjects.size || dirty.delActionables.size;
+  const ae = document.activeElement;
+  const typing = ae && (ae.tagName === 'TEXTAREA' ||
+    (ae.tagName === 'INPUT' && ae.type !== 'checkbox') || ae.isContentEditable);
+  const uiBusy = activeStatusPicker || activeAssignPicker || activeMoreMenu ||
+    activeTabEditor || wsMembersOpen || activeFilterDropdown || recurringEditor;
+  // Defer (don't interrupt) while we have unsynced edits, the user is typing,
+  // a menu is open, or we just wrote (the change is probably our own echo).
+  if (pending || typing || uiBusy || (Date.now() - lastLocalWriteAt < 1500)) {
+    scheduleRealtimeReload();
+    return;
+  }
+  syncEnabled = false;
+  await loadStateFromCloud();
+  await loadAssigneeContext();
+  syncEnabled = true;
+  renderAll();
+}
+// Workspace members who can see the board a project lives on.
+function eligibleAssignees(p) {
+  const boardId = p.labelId;
+  if (!boardId) return wsMembers.slice();                 // uncategorized → all members
+  const l = findLabel(boardId);
+  const vis = l ? (l.visibility || 'workspace') : 'workspace';
+  if (vis !== 'restricted') return wsMembers.slice();
+  const allow = boardAllow[boardId] || new Set();
+  return wsMembers.filter(m => m.role === 'owner' || allow.has(m.user_id));
+}
+function memberById(uid) { return wsMembers.find(m => m.user_id === uid) || null; }
+function setActionableAssignee(projId, itemId, uid) {
+  const p = findProject(projId); if (!p) return;
+  const a = findActionable(p, itemId); if (!a) return;
+  a.assignee = uid || null;
+  touchActionable(a);
+  markActionDirty(itemId);
+  activeAssignPicker = null;
+  saveState(); renderAll();
+}
+// Compact avatar/affordance shown on a task row. Hidden in a solo workspace
+// unless the task already has an assignee.
+function renderAssigneeChip(p, a) {
+  const hasOthers = wsMembers.length > 1;
+  if (!a.assignee && !hasOthers) return "";
+  const m = a.assignee ? memberById(a.assignee) : null;
+  if (a.assignee) {
+    const label = m ? escapeAttr(wsmInitials(m)) : '·';
+    const who = m ? (m.display_name || m.email || 'member') : 'someone no longer in this workspace';
+    return '<div class="assignee-wrap">' +
+      '<button class="assignee-chip assigned" data-action="open-assignee" title="Assigned to ' + escapeAttr(who) + '">' + label + '</button>' +
+      renderAssigneePicker(p, a) +
+    '</div>';
+  }
+  return '<div class="assignee-wrap">' +
+    '<button class="assignee-chip" data-action="open-assignee" title="Assign to someone">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<circle cx="12" cy="8" r="3.2"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/>' +
+      '</svg>' +
+    '</button>' +
+    renderAssigneePicker(p, a) +
+  '</div>';
+}
+function renderAssigneePicker(p, a) {
+  if (activeAssignPicker !== p.id + ':' + a.id) return "";
+  const elig = eligibleAssignees(p);
+  const opts = elig.length
+    ? elig.map(m =>
+        '<div class="picker-option" data-action="set-assignee" data-uid="' + m.user_id + '">' +
+          '<span class="assignee-dot">' + escapeAttr(wsmInitials(m)) + '</span>' +
+          '<span>' + escapeAttr(m.display_name || m.email || 'Member') + (m.user_id === currentUser.id ? ' (you)' : '') + '</span>' +
+        '</div>'
+      ).join("")
+    : '<div class="picker-option" style="opacity:.6; cursor:default;">No one to assign</div>';
+  const clear = a.assignee
+    ? '<div class="picker-divider"></div><div class="picker-option clear" data-action="set-assignee" data-uid="">Unassign</div>'
+    : "";
+  return '<div class="status-picker assignee-picker">' + opts + clear + '</div>';
+}
+
 async function loadStateFromCloud() {
   if (!sb || !currentUser) return;
   // Scope tabs/projects/actionables to the active workspace. (RLS still guards
@@ -7521,6 +7707,7 @@ async function loadStateFromCloud() {
       recurTime: a.recur_time || null,
       recurDow: (a.recur_dow === null || a.recur_dow === undefined) ? null : a.recur_dow,
       recurDom: (a.recur_dom === null || a.recur_dom === undefined) ? null : a.recur_dom,
+      assignee: a.assignee_id || null,
       createdAt: a.created_at, updatedAt: a.updated_at, doneAt: a.done_at, stuckSince: a.stuck_since,
       labels: []
     });
@@ -7644,6 +7831,7 @@ async function flushDirty() {
       recur_dow: (a.recurDow === null || a.recurDow === undefined) ? null : a.recurDow,
       recur_dom: (a.recurDom === null || a.recurDom === undefined) ? null : a.recurDom,
       position: loc.position,
+      assignee_id: a.assignee || null,
       updated_at: a.updatedAt || new Date().toISOString(),
       done_at: a.doneAt || null, stuck_since: a.stuckSince || null
     }));
@@ -7684,10 +7872,12 @@ async function flushDirty() {
   dirty.delTabs.clear(); dirty.delProjects.clear(); dirty.delActionables.clear();
   dirty.journal.clear();
   dirty.prefs = false;
+  if (ops.length) lastLocalWriteAt = Date.now();  // so realtime ignores our own echo
   try {
     const results = await Promise.all(ops);
     const errs = results.filter(r => r && r.error);
     if (errs.length) console.error('sync errors', errs.map(r => r.error));
+    if (ops.length) lastLocalWriteAt = Date.now();
   } catch (e) {
     console.error('Sync failed:', e);
   }
@@ -7779,6 +7969,7 @@ async function initAfterAuth() {
   await maybeMigrateLocalStorage();
   await adoptOrphanRowsOnce();          // pull any pre-workspace rows into the active workspace
   await loadStateFromCloud();
+  await loadAssigneeContext();          // workspace members + board allow-lists for assignment
   reactivateRecurring(); // bring back any recurring tasks now due
   purgeOldArchivedTasks(); // clear out archived tasks older than the retention window
   document.getElementById('signed-in').style.display = '';
@@ -7788,6 +7979,7 @@ async function initAfterAuth() {
   renderWorkspaceSwitcher();
   setView(currentView);
   syncEnabled = true;
+  subscribeRealtime();                  // live updates for the active workspace
 }
 
 async function bootstrap() {
@@ -7813,6 +8005,7 @@ async function bootstrap() {
       currentUser = session.user;
       await initAfterAuth();
     } else if (event === 'SIGNED_OUT') {
+      unsubscribeRealtime();
       currentUser = null;
       currentWorkspaceId = null;
       myWorkspaces = [];
