@@ -1901,6 +1901,30 @@ ul.items li.done input.item-text { color: var(--text-4); text-decoration: line-t
   border-radius: 14px; padding: 22px; width: 100%; max-width: 380px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.45);
 }
+/* Workspace members modal */
+.wsm-card { max-width: 460px; }
+.wsm-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; }
+.wsm-title { font-size: 17px; font-weight: 600; color: var(--text); }
+.wsm-sub { font-size: 12px; color: var(--text-3); }
+.wsm-section-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 18px 0 8px; }
+.wsm-row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 9px; margin-bottom: 6px; }
+.wsm-avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--card-hover); color: var(--text-2); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.wsm-meta { flex: 1; min-width: 0; }
+.wsm-name { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsm-email { font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wsm-tag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-4); }
+.wsm-tag.pending { color: var(--warn); }
+.wsm-rm { background: none; border: none; color: var(--text-4); cursor: pointer; font-size: 15px; padding: 2px 6px; }
+.wsm-rm:hover { color: var(--bad); }
+.wsm-invite { display: flex; gap: 8px; margin-top: 8px; }
+.wsm-invite input { flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 9px 11px; font-family: inherit; font-size: 13px; }
+.wsm-invite input:focus { outline: none; border-color: var(--accent); }
+.wsm-invite button { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 0 14px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.wsm-invite button:disabled { opacity: 0.5; cursor: default; }
+.wsm-err { color: var(--bad); font-size: 12px; margin-top: 8px; min-height: 14px; }
+.wsm-err.ok { color: var(--good); }
+.wsm-foot { display: flex; justify-content: flex-end; margin-top: 18px; }
+.wsm-empty { font-size: 12px; color: var(--text-4); padding: 6px 2px; }
 .recur-card .recur-title { font-size: 17px; font-weight: 600; color: var(--text); }
 .recur-card .recur-sub { font-size: 13px; color: var(--text-2); margin-top: 2px; }
 .recur-card .recur-note { font-size: 12px; color: var(--text-3); margin: 10px 0 14px; line-height: 1.4; }
@@ -2687,6 +2711,7 @@ ul.items li:hover .row-tool { opacity: 1; }
 </main>
 
 <div id="recurring-modal-root"></div>
+<div id="ws-members-root"></div>
 
 <!-- Collapsible right-side history panel: previous-day journal entries + completed tasks -->
 <button class="history-toggle" id="history-toggle" title="Open history">
@@ -2719,6 +2744,11 @@ let syncEnabled = false; // set true after initial cloud load to start syncing m
 let currentWorkspaceId = null;       // the active workspace whose data is loaded
 let myWorkspaces = [];               // [{ id, name, owner_id, isOwner }]
 let wsSwitcherOpen = false;
+// Members & invites modal state
+let wsMembersOpen = false;
+let wsMembers = [];                  // [{ user_id, role, email, display_name }]
+let wsInvites = [];                  // [{ id, email, role }]
+let wsMembersMsg = null;             // { text, ok } | null
 
 function bootLog(msg) { /* console.log('[slate]', msg); */ }
 
@@ -7235,6 +7265,9 @@ function renderWorkspaceSwitcher() {
         '</div>'
       ).join('') +
       '<div class="ws-divider"></div>' +
+      '<div class="ws-option" data-ws-members="1">' +
+        (currentWorkspaceIsOwned() ? 'Manage members' : 'Members') +
+      '</div>' +
       '<div class="ws-option ws-new" data-ws-new="1">+ New workspace</div>' +
     '</div>';
   }
@@ -7251,6 +7284,165 @@ function renderWorkspaceSwitcher() {
   }));
   const nw = el.querySelector('[data-ws-new]');
   if (nw) nw.addEventListener('click', (e) => { e.stopPropagation(); createWorkspacePrompt(); });
+  const mm = el.querySelector('[data-ws-members]');
+  if (mm) mm.addEventListener('click', (e) => { e.stopPropagation(); openWorkspaceMembers(); });
+}
+
+// ─── Members & invites ─────────────────────────────────
+function currentWorkspaceIsOwned() {
+  const w = myWorkspaces.find(x => x.id === currentWorkspaceId);
+  return !!(w && w.isOwner);
+}
+function wsmInitials(m) {
+  const name = (m.display_name || '').trim();
+  if (name) {
+    const p = name.split(/\s+/);
+    return ((p[0][0] || '') + (p[1] ? p[1][0] : '')).toUpperCase();
+  }
+  return (m.email || '?').slice(0, 2).toUpperCase();
+}
+async function refreshWorkspaceMembers() {
+  wsMembers = []; wsInvites = [];
+  if (!currentWorkspaceId) return;
+  const memRes = await sb.from('workspace_members').select('user_id, role').eq('workspace_id', currentWorkspaceId);
+  const members = memRes.data || [];
+  const ids = members.map(m => m.user_id);
+  let profs = [];
+  if (ids.length) {
+    const pr = await sb.from('profiles').select('id, email, display_name').in('id', ids);
+    profs = pr.data || [];
+  }
+  wsMembers = members.map(m => {
+    const p = profs.find(x => x.id === m.user_id) || {};
+    return { user_id: m.user_id, role: m.role, email: p.email || '', display_name: p.display_name || '' };
+  }).sort((a, b) => (a.role === 'owner' ? 0 : 1) - (b.role === 'owner' ? 0 : 1));
+  // Invites are owner-only by RLS; members just get an empty list.
+  const invRes = await sb.from('workspace_invites').select('id, email, role').eq('workspace_id', currentWorkspaceId);
+  wsInvites = invRes.error ? [] : (invRes.data || []);
+}
+async function openWorkspaceMembers() {
+  wsSwitcherOpen = false; wsMembersOpen = true; wsMembersMsg = null;
+  renderWorkspaceSwitcher();
+  renderWorkspaceMembersModal();      // show immediately (loading)
+  await refreshWorkspaceMembers();
+  renderWorkspaceMembersModal();
+}
+function closeWorkspaceMembers() { wsMembersOpen = false; renderWorkspaceMembersModal(); }
+async function inviteToWorkspace() {
+  const input = document.getElementById('wsm-invite-input');
+  const email = (input ? input.value : '').trim().toLowerCase();
+  if (!/.+@.+\..+/.test(email)) { wsMembersMsg = { text: 'Enter a valid email.', ok: false }; renderWorkspaceMembersModal(); return; }
+  if (wsMembers.some(m => (m.email || '').toLowerCase() === email)) {
+    wsMembersMsg = { text: 'That person is already a member.', ok: false }; renderWorkspaceMembersModal(); return;
+  }
+  const ins = await sb.from('workspace_invites').insert({
+    workspace_id: currentWorkspaceId, email, role: 'member', invited_by: currentUser.id
+  });
+  if (ins.error) {
+    wsMembersMsg = { text: ins.error.code === '23505' ? 'Already invited.' : 'Could not send the invite.', ok: false };
+  } else {
+    wsMembersMsg = { text: 'Invited ' + email + ' — they join automatically when they sign in.', ok: true };
+    await refreshWorkspaceMembers();
+  }
+  renderWorkspaceMembersModal();
+}
+async function revokeInvite(id) {
+  await sb.from('workspace_invites').delete().eq('id', id);
+  await refreshWorkspaceMembers();
+  renderWorkspaceMembersModal();
+}
+async function removeMember(uid) {
+  if (!confirm('Remove this member? They lose access to this workspace\'s boards.')) return;
+  await sb.from('workspace_members').delete().eq('workspace_id', currentWorkspaceId).eq('user_id', uid);
+  await refreshWorkspaceMembers();
+  renderWorkspaceMembersModal();
+}
+async function leaveWorkspace() {
+  if (!confirm('Leave this workspace? You\'ll lose access until you\'re invited again.')) return;
+  await sb.from('workspace_members').delete().eq('workspace_id', currentWorkspaceId).eq('user_id', currentUser.id);
+  wsMembersOpen = false;
+  await loadWorkspaces();
+  const fallback = myWorkspaces.find(w => w.isOwner) || myWorkspaces[0];
+  if (fallback) { localStorage.setItem('workspace', fallback.id); await switchWorkspace(fallback.id); }
+  renderWorkspaceMembersModal();
+}
+function renderWorkspaceMembersModal() {
+  const root = document.getElementById('ws-members-root');
+  if (!root) return;
+  if (!wsMembersOpen) { root.innerHTML = ''; return; }
+  const isOwner = currentWorkspaceIsOwned();
+  const ws = myWorkspaces.find(w => w.id === currentWorkspaceId);
+  const memberRows = wsMembers.length ? wsMembers.map(m =>
+    '<div class="wsm-row">' +
+      '<div class="wsm-avatar">' + escapeAttr(wsmInitials(m)) + '</div>' +
+      '<div class="wsm-meta">' +
+        '<div class="wsm-name">' + escapeAttr(m.display_name || m.email || 'Member') +
+          (m.user_id === currentUser.id ? ' (you)' : '') + '</div>' +
+        (m.email ? '<div class="wsm-email">' + escapeAttr(m.email) + '</div>' : '') +
+      '</div>' +
+      '<span class="wsm-tag">' + (m.role === 'owner' ? 'Owner' : 'Member') + '</span>' +
+      ((isOwner && m.role !== 'owner')
+        ? '<button class="wsm-rm" data-rm-member="' + m.user_id + '" title="Remove member">×</button>' : '') +
+    '</div>'
+  ).join('') : '<div class="wsm-empty">Just you so far.</div>';
+
+  let inviteSection = '';
+  if (isOwner) {
+    const inviteRows = wsInvites.length ? wsInvites.map(i =>
+      '<div class="wsm-row">' +
+        '<div class="wsm-avatar">' + escapeAttr((i.email || '?').slice(0, 2).toUpperCase()) + '</div>' +
+        '<div class="wsm-meta"><div class="wsm-name">' + escapeAttr(i.email) + '</div></div>' +
+        '<span class="wsm-tag pending">Pending</span>' +
+        '<button class="wsm-rm" data-revoke="' + i.id + '" title="Revoke invite">×</button>' +
+      '</div>'
+    ).join('') : '<div class="wsm-empty">No pending invites.</div>';
+    const msg = wsMembersMsg
+      ? '<div class="wsm-err' + (wsMembersMsg.ok ? ' ok' : '') + '">' + escapeAttr(wsMembersMsg.text) + '</div>'
+      : '<div class="wsm-err"></div>';
+    inviteSection =
+      '<div class="wsm-section-label">Invite someone</div>' +
+      '<div class="wsm-invite">' +
+        '<input type="email" id="wsm-invite-input" placeholder="name@email.com" spellcheck="false">' +
+        '<button id="wsm-invite-btn">Invite</button>' +
+      '</div>' + msg +
+      '<div class="wsm-section-label">Pending invites</div>' + inviteRows;
+  }
+
+  const leaveBtn = (!isOwner)
+    ? '<button class="recur-off" id="wsm-leave" style="width:auto; margin:0;">Leave workspace</button>'
+    : '<span></span>';
+
+  root.innerHTML =
+    '<div class="modal-overlay" id="wsm-overlay">' +
+      '<div class="modal-card wsm-card">' +
+        '<div class="wsm-head">' +
+          '<div><div class="wsm-title">' + escapeAttr((ws && ws.name) || 'Workspace') + '</div>' +
+          '<div class="wsm-sub">' + (isOwner ? 'You own this workspace' : 'You\'re a member') + '</div></div>' +
+        '</div>' +
+        '<div class="wsm-section-label">Members · ' + wsMembers.length + '</div>' +
+        memberRows +
+        inviteSection +
+        '<div class="wsm-foot" style="justify-content:space-between;">' +
+          leaveBtn +
+          '<button class="btn accent" id="wsm-close">Done</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.getElementById('wsm-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'wsm-overlay') closeWorkspaceMembers();
+  });
+  document.getElementById('wsm-close').addEventListener('click', closeWorkspaceMembers);
+  const ib = document.getElementById('wsm-invite-btn');
+  if (ib) ib.addEventListener('click', inviteToWorkspace);
+  const ii = document.getElementById('wsm-invite-input');
+  if (ii) ii.addEventListener('keydown', (e) => { if (e.key === 'Enter') inviteToWorkspace(); });
+  root.querySelectorAll('[data-rm-member]').forEach(b =>
+    b.addEventListener('click', () => removeMember(b.dataset.rmMember)));
+  root.querySelectorAll('[data-revoke]').forEach(b =>
+    b.addEventListener('click', () => revokeInvite(b.dataset.revoke)));
+  const lv = document.getElementById('wsm-leave');
+  if (lv) lv.addEventListener('click', leaveWorkspace);
 }
 
 async function loadStateFromCloud() {
