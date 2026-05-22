@@ -1279,6 +1279,22 @@ body.journal-mode .filter-bar { display: none !important; }
 .tab-edit-popover .share-row {
   display: flex; gap: 6px; margin-bottom: 8px;
 }
+/* Visibility toggle + allow-list */
+.tab-edit-popover .vis-toggle { display: flex; gap: 6px; margin-bottom: 8px; }
+.tab-edit-popover .vis-opt {
+  flex: 1; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text-2); font-family: inherit; font-size: 11px; font-weight: 600;
+  padding: 7px 8px; border-radius: 6px; cursor: pointer;
+}
+.tab-edit-popover .vis-opt:hover { border-color: var(--border-strong); }
+.tab-edit-popover .vis-opt.on { border-color: var(--accent); color: var(--accent); background: rgba(255,107,71,0.08); }
+.tab-edit-popover .vis-members { display: flex; flex-direction: column; gap: 2px; max-height: 160px; overflow-y: auto; }
+.tab-edit-popover .vis-member {
+  display: flex; align-items: center; gap: 8px; padding: 5px 6px;
+  border-radius: 5px; font-size: 12px; color: var(--text); cursor: pointer;
+}
+.tab-edit-popover .vis-member:hover { background: var(--card-hover); }
+.tab-edit-popover .vis-member input { accent-color: var(--accent); cursor: pointer; }
 .tab-edit-popover .share-email-input {
   flex: 1; min-width: 0;
   background: var(--bg); border: 1px solid var(--border-strong);
@@ -3907,6 +3923,28 @@ async function removeBoardMember(boardId, userId) {
   if (del.error) console.error('remove member', del.error);
   boardMembersCache[boardId] = await loadBoardMembers(boardId);
 }
+// Flip a board between workspace-visible (everyone) and restricted (allow-list).
+// The DB trigger enforces that only the workspace owner can do this.
+async function setBoardVisibility(boardId, vis) {
+  const upd = await sb.from('tabs').update({ visibility: vis }).eq('id', boardId);
+  if (upd.error) { boardShareError[boardId] = 'Could not change visibility.'; return; }
+  boardShareError[boardId] = '';
+  const l = findLabel(boardId);
+  if (l) l.visibility = vis;
+}
+// Add/remove a workspace member from a restricted board's allow-list.
+async function toggleBoardMember(boardId, userId, on) {
+  if (on) {
+    const ins = await sb.from('tab_members').insert({ tab_id: boardId, user_id: userId, role: 'editor' });
+    if (ins.error && ins.error.code !== '23505') boardShareError[boardId] = 'Could not grant access.';
+    else boardShareError[boardId] = '';
+  } else {
+    const del = await sb.from('tab_members').delete().eq('tab_id', boardId).eq('user_id', userId);
+    if (del.error) boardShareError[boardId] = 'Could not remove access.';
+    else boardShareError[boardId] = '';
+  }
+  boardMembersCache[boardId] = await loadBoardMembers(boardId);
+}
 
 function renderTabEditPopover(l) {
   const swatches = COLOR_PALETTE.map(c =>
@@ -3914,34 +3952,46 @@ function renderTabEditPopover(l) {
       'data-color="' + c.hex + '" data-label-id="' + l.id + '" ' +
       'style="background:' + c.hex + ';" title="' + c.name + '"></div>'
   ).join("");
-  // Share section — shows members + add-by-email
-  const members = boardMembersCache[l.id] || [];
+  // Visibility section — owner-only. Open (everyone in the workspace) vs
+  // Restricted (only the members you tick). The allow-list is tab_members.
   const err = boardShareError[l.id] || "";
-  const membersHtml = members.length === 0
-    ? '<div class="share-empty">Only you can see this board.</div>'
-    : members.map(m =>
-        '<div class="share-member">' +
-          '<span class="share-email">' + escapeAttr(m.email || m.display_name || 'Member') + '</span>' +
-          '<button class="share-remove" data-action="remove-member" ' +
-            'data-board-id="' + l.id + '" data-user-id="' + m.user_id + '" ' +
-            'title="Remove member">×</button>' +
-        '</div>'
-      ).join("");
   const errHtml = err ? '<div class="share-error">' + escapeAttr(err) + '</div>' : '';
+  const isOwner = currentWorkspaceIsOwned();
+  const vis = l.visibility || 'workspace';
+  let visSection = '';
+  if (isOwner) {
+    const allowed = new Set((boardMembersCache[l.id] || []).map(m => m.user_id));
+    const others = wsMembers.filter(m => m.role !== 'owner');
+    let allowHtml;
+    if (vis !== 'restricted') {
+      allowHtml = '<div class="share-empty">Everyone in the workspace can see this board.</div>';
+    } else if (others.length === 0) {
+      allowHtml = '<div class="share-empty">No one to add yet — invite people via Manage members.</div>';
+    } else {
+      allowHtml = others.map(m =>
+        '<label class="vis-member">' +
+          '<input type="checkbox" data-allow-board="' + l.id + '" data-allow-user="' + m.user_id + '"' +
+            (allowed.has(m.user_id) ? ' checked' : '') + '>' +
+          '<span>' + escapeAttr(m.display_name || m.email || 'Member') + '</span>' +
+        '</label>'
+      ).join("");
+    }
+    visSection =
+      '<div class="share-section">' +
+        '<div class="share-title">Who can see this board</div>' +
+        '<div class="vis-toggle">' +
+          '<button class="vis-opt' + (vis === 'workspace' ? ' on' : '') + '" data-vis="workspace" data-board-id="' + l.id + '">Everyone</button>' +
+          '<button class="vis-opt' + (vis === 'restricted' ? ' on' : '') + '" data-vis="restricted" data-board-id="' + l.id + '">Only specific people</button>' +
+        '</div>' +
+        '<div class="vis-members">' + allowHtml + '</div>' +
+        errHtml +
+      '</div>';
+  }
 
   return '<div class="tab-edit-popover" data-label-id="' + l.id + '">' +
     '<input type="text" class="name" placeholder="Board name" value="' + escapeAttr(l.name) + '">' +
     '<div class="swatches">' + swatches + '</div>' +
-    '<div class="share-section">' +
-      '<div class="share-title">Share</div>' +
-      '<div class="share-row">' +
-        '<input type="email" class="share-email-input" placeholder="email@example.com" ' +
-          'data-board-id="' + l.id + '">' +
-        '<button class="share-add" data-action="add-member" data-board-id="' + l.id + '">Add</button>' +
-      '</div>' +
-      errHtml +
-      '<div class="share-members">' + membersHtml + '</div>' +
-    '</div>' +
+    visSection +
     '<button class="delete-btn" data-action="delete-tab" data-label-id="' + l.id + '">Delete board</button>' +
   '</div>';
 }
@@ -4121,8 +4171,9 @@ function wireTabs() {
           const inp = document.querySelector('.tab-edit-popover input.name');
           if (inp) { inp.focus(); inp.select(); }
         }, 0);
-        // Lazily fetch members and re-render the popover when they arrive
-        loadBoardMembers(id).then(members => {
+        // Lazily fetch the board's allow-list AND the workspace members (so the
+        // owner can tick who gets access), then re-render the popover.
+        Promise.all([loadBoardMembers(id), refreshWorkspaceMembers()]).then(([members]) => {
           boardMembersCache[id] = members;
           if (activeTabEditor === id) renderTabs();
         });
@@ -4195,42 +4246,22 @@ function wireTabs() {
     });
   });
 
-  // Share inputs — Enter or Add button → share with that email
-  tabsEl.querySelectorAll('.tab-edit-popover .share-email-input').forEach(inp => {
-    inp.addEventListener('click', (e) => e.stopPropagation());
-    inp.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const id = inp.dataset.boardId;
-        const email = inp.value;
-        inp.disabled = true;
-        shareBoardWithUser(id, email).then(() => {
-          if (!boardShareError[id]) inp.value = "";
-          if (activeTabEditor === id) renderTabs();
-        });
-      }
-    });
-  });
-  tabsEl.querySelectorAll('.tab-edit-popover [data-action="add-member"]').forEach(btn => {
+  // Visibility toggle — Everyone vs Only specific people
+  tabsEl.querySelectorAll('.tab-edit-popover .vis-opt').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const id = btn.dataset.boardId;
-      const inp = document.querySelector('.tab-edit-popover .share-email-input[data-board-id="' + id + '"]');
-      if (!inp) return;
-      const email = inp.value;
-      inp.disabled = true;
-      shareBoardWithUser(id, email).then(() => {
-        if (!boardShareError[id]) inp.value = "";
+      setBoardVisibility(id, btn.dataset.vis).then(() => {
         if (activeTabEditor === id) renderTabs();
       });
     });
   });
-  tabsEl.querySelectorAll('.tab-edit-popover [data-action="remove-member"]').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const id = btn.dataset.boardId;
-      const uid2 = btn.dataset.userId;
-      removeBoardMember(id, uid2).then(() => {
+  // Allow-list checkboxes (restricted boards)
+  tabsEl.querySelectorAll('.tab-edit-popover [data-allow-user]').forEach(cb => {
+    cb.addEventListener('click', (e) => e.stopPropagation());
+    cb.addEventListener('change', () => {
+      const id = cb.dataset.allowBoard;
+      toggleBoardMember(id, cb.dataset.allowUser, cb.checked).then(() => {
         if (activeTabEditor === id) renderTabs();
       });
     });
@@ -7467,7 +7498,7 @@ async function loadStateFromCloud() {
   if (prefsRes.error)       console.error('prefs', prefsRes.error);
   if (journalRes && journalRes.error) console.error('journal', journalRes.error);
 
-  state.labels = (tabsRes.data || []).map(t => ({ id: t.id, name: t.name || '', color: t.color || '#ff6b47' }));
+  state.labels = (tabsRes.data || []).map(t => ({ id: t.id, name: t.name || '', color: t.color || '#ff6b47', visibility: t.visibility || 'workspace' }));
 
   const byProject = {};
   (actionablesRes.data || []).forEach(a => {
