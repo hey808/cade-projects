@@ -213,6 +213,31 @@ body > * { position: relative; z-index: 1; }
   top: 0;
 }
 .sidebar-header { padding: 0 10px; margin-bottom: 18px; }
+/* Workspace switcher */
+.ws-switcher { position: relative; padding: 0 10px; margin-bottom: 14px; }
+.ws-current {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 8px 10px; font-family: inherit; font-size: 13px;
+  font-weight: 600; cursor: pointer; text-align: left;
+}
+.ws-current:hover { border-color: var(--border-strong); }
+.ws-current .ws-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-current .caret { color: var(--text-4); font-size: 10px; }
+.ws-menu {
+  position: absolute; left: 10px; right: 10px; top: calc(100% + 4px); z-index: 120;
+  background: var(--card); border: 1px solid var(--border-strong);
+  border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.ws-option {
+  display: flex; align-items: center; gap: 8px; padding: 7px 9px;
+  border-radius: 6px; font-size: 13px; color: var(--text); cursor: pointer;
+}
+.ws-option:hover { background: var(--card-hover); }
+.ws-option.active { color: var(--accent); }
+.ws-option .ws-role { margin-left: auto; font-size: 10px; color: var(--text-4); text-transform: uppercase; letter-spacing: 0.05em; }
+.ws-option.ws-new { color: var(--text-3); }
+.ws-divider { height: 1px; background: var(--border); margin: 4px 2px; }
 .sidebar-header h1 {
   font-family: var(--font-serif);
   font-size: 28px; font-weight: 600;
@@ -2609,6 +2634,7 @@ ul.items li:hover .row-tool { opacity: 1; }
     <h1>Slate</h1>
     <div class="sidebar-date" id="header-date"></div>
   </div>
+  <div class="ws-switcher" id="workspace-switcher"></div>
   <div class="sidebar-tabs" id="tabs"></div>
   <div class="sidebar-footer">
     <div class="signed-in" id="signed-in" style="display:none;">
@@ -2688,6 +2714,11 @@ let sb = null;
 let currentUser = null;
 let authMode = 'signin';
 let syncEnabled = false; // set true after initial cloud load to start syncing mutations
+
+// ─── Workspace context (multi-workspace) ───────────────
+let currentWorkspaceId = null;       // the active workspace whose data is loaded
+let myWorkspaces = [];               // [{ id, name, owner_id, isOwner }]
+let wsSwitcherOpen = false;
 
 function bootLog(msg) { /* console.log('[slate]', msg); */ }
 
@@ -5418,6 +5449,10 @@ function wireProjects() {
 }
 
 document.addEventListener("click", (e) => {
+  if (wsSwitcherOpen && !e.target.closest('.ws-switcher')) {
+    wsSwitcherOpen = false;
+    renderWorkspaceSwitcher();
+  }
   if (activeStatusPicker && !e.target.closest('.status-picker') && !e.target.closest('[data-action="open-status-picker"]')) {
     activeStatusPicker = null;
     if (currentView === "home") renderHome();
@@ -7117,12 +7152,120 @@ document.getElementById('sign-out-btn').addEventListener('click', async () => {
 });
 
 // ─── Cloud data layer ──────────────────────────────────
+// ─── Workspace bootstrap + switching ───────────────────
+async function loadWorkspaces() {
+  const res = await sb.from('workspaces').select('id,name,owner_id').order('created_at', { ascending: true });
+  if (res.error) { console.error('workspaces', res.error); myWorkspaces = []; return; }
+  myWorkspaces = (res.data || []).map(w => ({
+    id: w.id, name: w.name || 'Workspace', owner_id: w.owner_id,
+    isOwner: w.owner_id === currentUser.id
+  }));
+}
+// On login: make sure the user owns a workspace, claim any invites addressed to
+// their email, load their workspaces, and pick the active one.
+async function bootstrapWorkspaces() {
+  if (!sb || !currentUser) return;
+  try { await sb.rpc('ensure_workspace'); } catch (e) { console.error('ensure_workspace', e); }
+  try { await sb.rpc('claim_my_invites'); } catch (e) { console.error('claim_my_invites', e); }
+  await loadWorkspaces();
+  const saved = localStorage.getItem('workspace');
+  const ids = new Set(myWorkspaces.map(w => w.id));
+  if (saved && ids.has(saved)) {
+    currentWorkspaceId = saved;
+  } else {
+    const owned = myWorkspaces.find(w => w.isOwner);
+    currentWorkspaceId = owned ? owned.id : (myWorkspaces[0] && myWorkspaces[0].id) || null;
+  }
+  if (currentWorkspaceId) localStorage.setItem('workspace', currentWorkspaceId);
+}
+// One-time safety net: stamp any of the user's own rows that predate workspaces
+// (created by an older client) into the active workspace so nothing goes missing.
+async function adoptOrphanRowsOnce() {
+  if (!currentWorkspaceId || localStorage.getItem('ws_adopted_v1')) return;
+  try {
+    await sb.from('tabs').update({ workspace_id: currentWorkspaceId })
+      .is('workspace_id', null).eq('owner_id', currentUser.id);
+    await sb.from('projects').update({ workspace_id: currentWorkspaceId })
+      .is('workspace_id', null).eq('owner_id', currentUser.id);
+    const pr = await sb.from('projects').select('id').eq('workspace_id', currentWorkspaceId);
+    const pids = (pr.data || []).map(x => x.id);
+    if (pids.length) {
+      await sb.from('actionables').update({ workspace_id: currentWorkspaceId })
+        .is('workspace_id', null).in('project_id', pids);
+    }
+    localStorage.setItem('ws_adopted_v1', '1');
+  } catch (e) { console.error('adopt orphans', e); }
+}
+async function switchWorkspace(id) {
+  wsSwitcherOpen = false;
+  if (!id || id === currentWorkspaceId) { renderWorkspaceSwitcher(); return; }
+  await flushDirty();                 // persist pending edits to the current workspace first
+  currentWorkspaceId = id;
+  localStorage.setItem('workspace', id);
+  syncEnabled = false;
+  await loadStateFromCloud();
+  syncEnabled = true;
+  currentView = 'home';
+  window.localStorage.setItem('view', 'home');
+  renderAll();
+  renderWorkspaceSwitcher();
+}
+async function createWorkspacePrompt() {
+  wsSwitcherOpen = false;
+  const name = (prompt('Name your new workspace:') || '').trim();
+  if (!name) { renderWorkspaceSwitcher(); return; }
+  const ins = await sb.from('workspaces').insert({ owner_id: currentUser.id, name }).select('id').single();
+  if (ins.error) { console.error('create workspace', ins.error); alert('Could not create the workspace.'); return; }
+  await sb.from('workspace_members').insert({ workspace_id: ins.data.id, user_id: currentUser.id, role: 'owner' });
+  await loadWorkspaces();
+  await switchWorkspace(ins.data.id);
+}
+function renderWorkspaceSwitcher() {
+  const el = document.getElementById('workspace-switcher');
+  if (!el) return;
+  const cur = myWorkspaces.find(w => w.id === currentWorkspaceId);
+  const name = cur ? cur.name : 'Workspace';
+  let menu = '';
+  if (wsSwitcherOpen) {
+    menu = '<div class="ws-menu">' +
+      myWorkspaces.map(w =>
+        '<div class="ws-option' + (w.id === currentWorkspaceId ? ' active' : '') + '" data-ws="' + w.id + '">' +
+          '<span>' + escapeAttr(w.name) + '</span>' +
+          (w.isOwner ? '<span class="ws-role">owner</span>' : '') +
+        '</div>'
+      ).join('') +
+      '<div class="ws-divider"></div>' +
+      '<div class="ws-option ws-new" data-ws-new="1">+ New workspace</div>' +
+    '</div>';
+  }
+  el.innerHTML =
+    '<button class="ws-current" id="ws-toggle" title="Switch workspace">' +
+      '<span class="ws-name">' + escapeAttr(name) + '</span><span class="caret">▾</span>' +
+    '</button>' + menu;
+  const toggle = document.getElementById('ws-toggle');
+  if (toggle) toggle.addEventListener('click', (e) => {
+    e.stopPropagation(); wsSwitcherOpen = !wsSwitcherOpen; renderWorkspaceSwitcher();
+  });
+  el.querySelectorAll('[data-ws]').forEach(o => o.addEventListener('click', (e) => {
+    e.stopPropagation(); switchWorkspace(o.dataset.ws);
+  }));
+  const nw = el.querySelector('[data-ws-new]');
+  if (nw) nw.addEventListener('click', (e) => { e.stopPropagation(); createWorkspacePrompt(); });
+}
+
 async function loadStateFromCloud() {
   if (!sb || !currentUser) return;
+  // Scope tabs/projects/actionables to the active workspace. (RLS still guards
+  // access; this just keeps each load to one workspace's data.)
+  const ws = currentWorkspaceId;
+  const tabsQ = ws ? sb.from('tabs').select('*').eq('workspace_id', ws).order('position', { ascending: true })
+                   : sb.from('tabs').select('*').order('position', { ascending: true });
+  const projQ = ws ? sb.from('projects').select('*').eq('workspace_id', ws).order('position', { ascending: true })
+                   : sb.from('projects').select('*').order('position', { ascending: true });
+  const actQ  = ws ? sb.from('actionables').select('*').eq('workspace_id', ws).order('position', { ascending: true })
+                   : sb.from('actionables').select('*').order('position', { ascending: true });
   const [tabsRes, projectsRes, actionablesRes, prefsRes, journalRes] = await Promise.all([
-    sb.from('tabs').select('*').order('position', { ascending: true }),
-    sb.from('projects').select('*').order('position', { ascending: true }),
-    sb.from('actionables').select('*').order('position', { ascending: true }),
+    tabsQ, projQ, actQ,
     sb.from('user_prefs').select('*').eq('user_id', currentUser.id).maybeSingle(),
     sb.from('journal_entries').select('*').order('entry_date', { ascending: false }).limit(60)
   ]);
@@ -7242,7 +7385,7 @@ async function flushDirty() {
     if (idx === -1) return;
     const t = state.labels[idx];
     ops.push(sb.from('tabs').upsert({
-      id: t.id, owner_id: currentUser.id,
+      id: t.id, owner_id: currentUser.id, workspace_id: currentWorkspaceId,
       name: t.name || '', color: t.color || '#ff6b47',
       position: idx
     }));
@@ -7252,7 +7395,7 @@ async function flushDirty() {
     if (idx === -1) return;
     const p = state.projects[idx];
     ops.push(sb.from('projects').upsert({
-      id: p.id, owner_id: currentUser.id, tab_id: p.labelId || null,
+      id: p.id, owner_id: currentUser.id, workspace_id: currentWorkspaceId, tab_id: p.labelId || null,
       name: p.name || '', goal: p.goal || '', position: idx,
       archived: !!p.archived, archived_at: p.archivedAt || null
     }));
@@ -7262,7 +7405,7 @@ async function flushDirty() {
     if (!loc) return;
     const a = loc.actionable;
     ops.push(sb.from('actionables').upsert({
-      id: a.id, project_id: loc.project.id,
+      id: a.id, project_id: loc.project.id, workspace_id: currentWorkspaceId,
       text: a.text || '', done: !!a.done, status: a.status || null,
       priority: a.priority || 0,
       blocker: a.blocker || '', waiting_for: a.waitingFor || '',
@@ -7409,7 +7552,9 @@ async function ensureProfile() {
 async function initAfterAuth() {
   syncEnabled = false;
   await ensureProfile();
+  await bootstrapWorkspaces();         // ensure/own workspace, claim invites, pick active one
   await maybeMigrateLocalStorage();
+  await adoptOrphanRowsOnce();          // pull any pre-workspace rows into the active workspace
   await loadStateFromCloud();
   reactivateRecurring(); // bring back any recurring tasks now due
   purgeOldArchivedTasks(); // clear out archived tasks older than the retention window
@@ -7417,6 +7562,7 @@ async function initAfterAuth() {
   const emailEl = document.getElementById('signed-in-email');
   if (emailEl) emailEl.textContent = (currentUser && currentUser.email) || '';
   showApp();
+  renderWorkspaceSwitcher();
   setView(currentView);
   syncEnabled = true;
 }
@@ -7445,6 +7591,11 @@ async function bootstrap() {
       await initAfterAuth();
     } else if (event === 'SIGNED_OUT') {
       currentUser = null;
+      currentWorkspaceId = null;
+      myWorkspaces = [];
+      wsSwitcherOpen = false;
+      localStorage.removeItem('workspace');
+      localStorage.removeItem('ws_adopted_v1');
       state = {
         projects: [], labels: [], filters: {},
         keystone: { date: null, text: "", done: false },
